@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: 3d-print-manager
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=America/Cuiaba
+    restart: unless-stopped
+

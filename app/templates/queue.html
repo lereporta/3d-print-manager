@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% set active_page = "queue" %}
+
+{% block title %}Fila de Impressão - 3D Print Manager{% endblock %}
+{% block page_title %}
+    <span class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Fila de Impressão
+    </span>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Add Job -->
+    <div class="lg:col-span-1 space-y-4">
+        <div class="card">
+            <div class="flex items-center gap-2 mb-5">
+                <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </div>
+                <h3 class="font-bold">Novo Trabalho</h3>
+            </div>
+
+            <form method="POST" action="/queue/add">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1.5">Nome do Trabalho</label>
+                        <input type="text" name="job_name" placeholder="Ex: Capa iPhone 15" class="input-field" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1.5">Peso da Peça</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" min="0"
+                                   name="piece_weight_g" value="0"
+                                   class="input-field has-suffix" placeholder="45.5">
+                            <span class="input-suffix">g</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Usado para debitar estoque ao finalizar</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1.5">Carretel</label>
+                        <select name="spool_id" class="input-field">
+                            <option value="0">-- Nenhum --</option>
+                            {% for spool in spools %}
+                            <option value="{{ spool.id }}">
+                                {{ spool.name }} ({{ spool.color }}) — {{ "%.0f"|format(spool.current_weight_g) }}g restantes
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1.5">Prioridade</label>
+                        <select name="priority" class="input-field">
+                            {% for p in priorities %}
+                            <option value="{{ p }}" {% if p == 'Média' %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1.5">Observações <span class="text-gray-400 font-normal">(opcional)</span></label>
+                        <textarea name="notes" rows="3" placeholder="Detalhes, cor, material..." class="input-field"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Adicionar à Fila
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Legend -->
+        <div class="card">
+            <h4 class="font-bold text-sm mb-3">Legenda</h4>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2"><span class="badge badge-pending">Pendente</span></div>
+                <div class="flex items-center gap-2"><span class="badge badge-printing">Imprimindo</span></div>
+                <div class="flex items-center gap-2"><span class="badge badge-done">Finalizado</span></div>
+            </div>
+            <h4 class="font-bold text-sm mt-4 mb-3">Prioridades</h4>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2"><span class="badge badge-low">Baixa</span></div>
+                <div class="flex items-center gap-2"><span class="badge badge-medium">Média</span></div>
+                <div class="flex items-center gap-2"><span class="badge badge-high">Alta</span></div>
+                <div class="flex items-center gap-2"><span class="badge badge-urgent">Urgente</span></div>
+            </div>
+            <div class="mt-4 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                <p class="text-xs text-blue-600 dark:text-blue-400">💡 Ao finalizar um trabalho, o peso da peça é automaticamente debitado do carretel selecionado.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job List -->
+    <div class="lg:col-span-2">
+        <div class="card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg">Trabalhos na Fila</h3>
+                <span class="text-sm text-gray-400">{{ jobs|length }} item(ns)</span>
+            </div>
+
+            {% if jobs|length > 0 %}
+            <div class="space-y-3">
+                {% for job in jobs %}
+                <div class="p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all
+                    {% if job.status == 'Finalizado' %}opacity-60{% endif %}">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h4 class="font-bold {% if job.status == 'Finalizado' %}line-through{% endif %}">{{ job.job_name }}</h4>
+                                {% if job.status == 'Pendente' %}
+                                    <span class="badge badge-pending">{{ job.status }}</span>
+                                {% elif job.status == 'Imprimindo' %}
+                                    <span class="badge badge-printing">{{ job.status }}</span>
+                                {% else %}
+                                    <span class="badge badge-done">{{ job.status }}</span>
+                                {% endif %}
+                                {% if job.priority == 'Baixa' %}
+                                    <span class="badge badge-low">{{ job.priority }}</span>
+                                {% elif job.priority == 'Média' %}
+                                    <span class="badge badge-medium">{{ job.priority }}</span>
+                                {% elif job.priority == 'Alta' %}
+                                    <span class="badge badge-high">{{ job.priority }}</span>
+                                {% else %}
+                                    <span class="badge badge-urgent">{{ job.priority }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex flex-wrap gap-3 mt-1 text-xs text-gray-400">
+                                {% if job.piece_weight_g > 0 %}
+                                <span>⚖️ {{ "%.1f"|format(job.piece_weight_g) }}g</span>
+                                {% endif %}
+                                {% if job.spool_id and job.spool_id in spool_map %}
+                                <span class="flex items-center gap-1">
+                                    <span class="spool-dot" style="width:10px;height:10px;background:{{ spool_map[job.spool_id].color_hex }}"></span>
+                                    {{ spool_map[job.spool_id].name }}
+                                </span>
+                                {% endif %}
+                                <span>{{ job.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                            </div>
+                            {% if job.notes %}
+                            <p class="text-xs text-gray-400 mt-1">📝 {{ job.notes }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <form method="POST" action="/queue/update/{{ job.id }}" class="flex items-center gap-1">
+                                <select name="status" class="input-field text-xs py-1 px-2" style="width:auto;min-width:120px;">
+                                    {% for s in statuses %}
+                                    <option value="{{ s }}" {% if s == job.status %}selected{% endif %}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-ghost text-xs py-1 px-2" title="Atualizar">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                </button>
+                            </form>
+                            <form method="POST" action="/queue/delete/{{ job.id }}" onsubmit="return confirmDelete('Remover este trabalho?');">
+                                <button type="submit" class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-16">
+                <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                <p class="text-gray-400 font-semibold mb-2">Fila vazia!</p>
+                <p class="text-sm text-gray-400">Adicione um trabalho usando o formulário ao lado.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
