@@ -1,0 +1,130 @@
+/* ===== Base input styles ===== */
+.label-text {
+    @apply block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5;
+}
+
+.input-field {
+    @apply w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700
+           bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200
+           focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none
+           transition-all duration-200;
+}
+
+.input-prefix {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none;
+}
+
+.input-suffix {
+    @apply absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none;
+}
+
+.card {
+    @apply bg-white dark:bg-gray-800/80 rounded-2xl border border-gray-100
+           dark:border-gray-700/50 p-5 shadow-sm;
+}
+
+/* ===== Toast ===== */
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in {
+    animation: slide-in 0.35s ease-out;
+}
+
+.toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 50;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.75rem;
+    background: rgb(17 24 39);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    animation: slide-in 0.35s ease-out;
+}
+
+/* ===== Volume table hover ===== */
+.card table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+/* ===== Supply row grid layout (FIX Bug 6) ===== */
+.supply-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 0.8fr 0.8fr auto;
+    gap: 0.5rem;
+    align-items: end;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(229 231 235);
+    background: rgb(249 250 251);
+    transition: opacity 0.3s ease;
+}
+
+:is(.dark) .supply-row {
+    border-color: rgb(55 65 81 / 0.5);
+    background: rgb(31 41 55 / 0.5);
+}
+
+/* Supply input group (R$ prefix) */
+.input-group {
+    position: relative;
+}
+.input-group .input-prefix {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgb(156 163 175);
+    pointer-events: none;
+}
+.input-group .has-prefix {
+    padding-left: 1.75rem;
+}
+
+/* Supply row responsivo */
+@media (max-width: 640px) {
+    .supply-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .supply-row > div:first-child {
+        grid-column: 1 / -1;
+    }
+    .supply-row > div:last-child {
+        grid-column: 2 / 3;
+        justify-self: end;
+    }
+}
+
+/* ===== Toggle active state ===== */
+#value-toggle.active {
+    background-color: rgb(16 185 129);
+}
+#value-toggle.active .toggle-dot {
+    transform: translateX(1.25rem);
+}
+.toggle-dot {
+    transition: transform 0.2s ease;
+}
+
+/* ===== Simulator bars ===== */
+.sim-bar {
+    transition: width 0.5s ease;
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    min-height: 1.5rem;
+}
+.sim-bar.profit   { background: linear-gradient(90deg, #10b981, #059669); }
+.sim-bar.reseller { background: linear-gradient(90deg, #6366f1, #4f46e5); }
+.sim-bar.loss     { background: linear-gradient(90deg, #ef4444, #dc2626); }

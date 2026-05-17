@@ -4,7 +4,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Budget, Settings, PrintJob, JobStatus
+import json
+from app.models import Budget, Settings, PrintJob, JobStatus, Spool
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -27,15 +28,31 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         .count()
     )
 
-    # ROI: soma de toda depreciação acumulada nos orçamentos salvos
     depreciation_total = (
         db.query(func.sum(Budget.depreciation_cost)).scalar() or 0.0
     )
     machine_cost = settings.machine_cost if settings.machine_cost else 0.0
-    if machine_cost > 0:
-        roi_percent = round((depreciation_total / machine_cost) * 100, 1)
-    else:
-        roi_percent = 0.0
+    roi_percent = (
+        round((depreciation_total / machine_cost) * 100, 1)
+        if machine_cost > 0
+        else 0.0
+    )
+
+    # Carregar carretéis para seleção de filamento
+    spools = db.query(Spool).filter(Spool.current_weight_g > 0).order_by(Spool.name).all()
+    spools_json = json.dumps([
+        {
+            "id": s.id,
+            "name": s.name,
+            "color": s.color,
+            "color_hex": s.color_hex,
+            "material": s.material,
+            "price_per_kg": s.price_per_kg,
+            "current_weight_g": round(s.current_weight_g, 1),
+            "remaining_percent": s.remaining_percent,
+        }
+        for s in spools
+    ])
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -43,6 +60,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "settings": settings,
             "recent_budgets": recent_budgets,
+            "spools_json": spools_json,
             "stats": {
                 "total_budgets": total_budgets,
                 "pending_jobs": pending_jobs,
@@ -57,34 +75,49 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/calculate")
+@router.post("/calculator")
 async def save_budget(
     request: Request,
     piece_name: str = Form("Sem nome"),
-    filament_price_kg: float = Form(...),
-    piece_weight_g: float = Form(...),
-    print_time_h: float = Form(...),
-    manual_time_h: float = Form(...),
-    depreciation_per_hour: float = Form(...),
-    labor_per_hour: float = Form(...),
+    filament_price_kg: float = Form(0),
+    piece_weight_g: float = Form(0),
+    print_time_h: float = Form(0),
+    manual_time_h: float = Form(0),
+    depreciation_per_hour: float = Form(0),
+    labor_per_hour: float = Form(0),
     risk_rate: float = Form(10.0),
     margin_percent: float = Form(100.0),
+    supplies_cost: float = Form(0.0),
+    value_multiplier: float = Form(1.0),
+    lot_quantity: int = Form(1),
+    unit_cost: float = Form(0.0),
+    unit_price: float = Form(0.0),
     db: Session = Depends(get_db),
 ):
     settings = db.query(Settings).first()
+    lot_qty = max(lot_quantity, 1)
 
+    # ── Custos do LOTE inteiro ──
     filament_cost = (piece_weight_g / 1000) * filament_price_kg
     energy_cost = print_time_h * settings.printer_consumption * settings.energy_tariff
     depreciation_cost = print_time_h * depreciation_per_hour
     labor_cost = manual_time_h * labor_per_hour
-    subtotal = filament_cost + energy_cost + depreciation_cost + labor_cost
+    subtotal = filament_cost + energy_cost + depreciation_cost + labor_cost + supplies_cost
     risk_cost = subtotal * (risk_rate / 100)
     total_cost = subtotal + risk_cost
 
-    final_price = total_cost * (1 + margin_percent / 100)
-    price_100 = total_cost * 2
-    price_200 = total_cost * 3
-    price_400 = total_cost * 5
+    # ── Preço do LOTE ──
+    mult = max(value_multiplier, 1.0)
+    final_price_lot = total_cost * (1 + margin_percent / 100) * mult
+
+    # ── Valores UNITÁRIOS ──
+    calc_unit_cost = total_cost / lot_qty
+    calc_unit_price = final_price_lot / lot_qty
+
+    # ── Sugestões (baseadas no unitário) ──
+    price_100 = calc_unit_price * 2
+    price_200 = calc_unit_price * 3
+    price_400 = calc_unit_price * 5
 
     budget = Budget(
         piece_name=piece_name.strip() if piece_name.strip() else "Sem nome",
@@ -96,15 +129,20 @@ async def save_budget(
         energy_cost=round(energy_cost, 2),
         depreciation_cost=round(depreciation_cost, 2),
         labor_cost=round(labor_cost, 2),
+        supplies_cost=round(supplies_cost, 2),
         subtotal=round(subtotal, 2),
         risk_rate=round(risk_rate, 1),
         risk_cost=round(risk_cost, 2),
         total_cost=round(total_cost, 2),
         margin_percent=round(margin_percent, 1),
-        final_price=round(final_price, 2),
+        value_multiplier=round(mult, 1),
+        final_price=round(calc_unit_price, 2),
         price_100=round(price_100, 2),
         price_200=round(price_200, 2),
         price_400=round(price_400, 2),
+        lot_quantity=lot_qty,
+        unit_cost=round(calc_unit_cost, 2),
+        unit_price=round(calc_unit_price, 2),
     )
     db.add(budget)
     db.commit()
@@ -121,4 +159,3 @@ async def update_machine_cost(
     settings.machine_cost = machine_cost
     db.commit()
     return RedirectResponse(url="/?settings_saved=1", status_code=303)
-

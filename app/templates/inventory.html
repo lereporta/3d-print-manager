@@ -78,6 +78,16 @@
                     </div>
 
                     <div>
+                        <label class="block text-sm font-semibold mb-1.5">Preço por KG</label>
+                        <div class="input-group">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" step="0.01" min="0" name="price_per_kg"
+                                   value="120.00" class="input-field has-prefix" placeholder="120.00" required>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Custo do filamento por quilograma</p>
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-semibold mb-1.5">Peso Inicial</label>
                         <div class="input-group">
                             <input type="number" step="1" min="1" name="initial_weight_g"
@@ -112,7 +122,7 @@
                         border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700
                     {% endif %}">
 
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                         <div class="flex-1">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="spool-dot" style="background:{{ spool.color_hex }}"></span>
@@ -126,8 +136,15 @@
                                 {% endif %}
                             </div>
 
+                            <!-- Price per KG -->
+                            <div class="mt-1">
+                                <span class="text-xs font-semibold text-indigo-500">
+                                    R$ {{ "%.2f"|format(spool.price_per_kg) }}/kg
+                                </span>
+                            </div>
+
                             <!-- Progress -->
-                            <div class="mt-3 space-y-1">
+                            <div class="mt-2 space-y-1">
                                 <div class="flex justify-between text-xs">
                                     <span class="text-gray-500">
                                         {{ "%.0f"|format(spool.current_weight_g) }}g restantes
@@ -153,23 +170,33 @@
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2">
-                            <!-- Manual Weight Edit -->
-                            <form method="POST" action="/inventory/edit/{{ spool.id }}" class="flex items-center gap-1">
+                        <div class="flex flex-col gap-2">
+                            <!-- Edit form: weight + price -->
+                            <form method="POST" action="/inventory/edit/{{ spool.id }}" class="flex items-center gap-1 flex-wrap">
                                 <div class="input-group" style="width: 100px;">
                                     <input type="number" step="1" min="0"
                                            name="current_weight_g"
                                            value="{{ "%.0f"|format(spool.current_weight_g) }}"
-                                           class="input-field has-suffix text-xs py-1 px-2">
+                                           class="input-field has-suffix text-xs py-1 px-2"
+                                           title="Peso atual (g)">
                                     <span class="input-suffix text-xs">g</span>
                                 </div>
-                                <button type="submit" class="btn btn-ghost text-xs py-1 px-2" title="Atualizar peso">
+                                <div class="input-group" style="width: 110px;">
+                                    <span class="input-prefix text-xs">R$</span>
+                                    <input type="number" step="0.01" min="0"
+                                           name="price_per_kg"
+                                           value="{{ "%.2f"|format(spool.price_per_kg) }}"
+                                           class="input-field has-prefix has-suffix text-xs py-1 px-2"
+                                           title="Preço por kg">
+                                    <span class="input-suffix text-xs">/kg</span>
+                                </div>
+                                <button type="submit" class="btn btn-ghost text-xs py-1 px-2" title="Atualizar">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 </button>
                             </form>
 
                             <!-- Delete -->
-                            <form method="POST" action="/inventory/delete/{{ spool.id }}" onsubmit="return confirmDelete('Remover este carretel?');">
+                            <form method="POST" action="/inventory/delete/{{ spool.id }}" onsubmit="return confirmDelete('Remover este carretel?');" class="flex justify-end">
                                 <button type="submit" class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                 </button>
@@ -190,4 +217,3 @@
     </div>
 </div>
 {% endblock %}
-

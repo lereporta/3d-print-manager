@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}Calculadora de Custos{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- ============================================================= -->
+    <!--  HEADER                                                        -->
+    <!-- ============================================================= -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2">
+                <span class="text-3xl">🧮</span> Calculadora de Custos
+            </h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Preencha os campos e veja o custo atualizar em tempo real.
+            </p>
+        </div>
+        <form method="POST" action="/calculator">
+            <!-- Hidden fields that JS populates before submit -->
+            <input type="hidden" name="piece_name" id="h_piece_name">
+            <input type="hidden" name="total_cost" id="h_total_cost">
+            <input type="hidden" name="final_price" id="h_final_price">
+            <input type="hidden" name="filament_cost" id="h_filament_cost">
+            <input type="hidden" name="energy_cost" id="h_energy_cost">
+            <input type="hidden" name="depreciation_cost" id="h_depreciation_cost">
+            <input type="hidden" name="labor_cost" id="h_labor_cost">
+            <input type="hidden" name="supplies_cost" id="h_supplies_cost">
+            <input type="hidden" name="print_time" id="h_print_time">
+
+            <div class="flex gap-2">
+                <input type="text" id="piece_name_input" name="piece_name_display"
+                       placeholder="Nome da peça..."
+                       class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700
+                              bg-white dark:bg-gray-800 text-sm w-48
+                              focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <button type="submit"
+                        class="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600
+                               text-white font-bold text-sm shadow-lg hover:shadow-xl
+                               hover:scale-105 transition-all duration-200">
+                    💾 Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ============================================================= -->
+    <!--  GRID PRINCIPAL: INPUTS (left) + RESULTADOS (right)            -->
+    <!-- ============================================================= -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+        <!-- ========== COLUNA ESQUERDA — INPUTS ========== -->
+        <div class="lg:col-span-3 space-y-5">
+
+            <!-- Card: Filamento -->
+            <div class="card">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl">🎨</span>
+                    <h2 class="font-bold text-gray-800 dark:text-white">Filamento</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label-text">Preço do Filamento (R$/kg)</label>
+                        <div class="relative">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="filament_price_kg" step="0.01" min="0"
+                                   value="{{ settings.filament_price_kg or 90 }}"
+                                   class="input-field pl-10">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label-text">Peso da Peça (g)</label>
+                        <div class="relative">
+                            <span class="input-suffix">g</span>
+                            <input type="number" id="piece_weight_g" step="0.1" min="0" value="0"
+                                   class="input-field pr-8">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Tempo -->
+            <div class="card">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl">⏱️</span>
+                    <h2 class="font-bold text-gray-800 dark:text-white">Tempo</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Tempo de Impressão -->
+                    <div>
+                        <label class="label-text">Tempo de Impressão</label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="print_hours" min="0" value="0"
+                                       class="input-field pr-8">
+                                <span class="input-suffix">h</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <input type="number" id="print_minutes" min="0" max="59" value="0"
+                                       class="input-field pr-10">
+                                <span class="input-suffix">min</span>
+                            </div>
+                        </div>
+                        <span id="print_time_label" class="text-xs text-gray-400 mt-1 block"></span>
+                    </div>
+                    <!-- Tempo Manual -->
+                    <div>
+                        <label class="label-text">Acabamento / Manual</label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="manual_hours" min="0" value="0"
+                                       class="input-field pr-8">
+                                <span class="input-suffix">h</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <input type="number" id="manual_minutes" min="0" max="59" value="0"
+                                       class="input-field pr-10">
+                                <span class="input-suffix">min</span>
+                            </div>
+                        </div>
+                        <span id="manual_time_label" class="text-xs text-gray-400 mt-1 block"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Custos Fixos -->
+            <div class="card">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl">⚙️</span>
+                    <h2 class="font-bold text-gray-800 dark:text-white">Custos Fixos</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label-text">Depreciação / hora (R$)</label>
+                        <div class="relative">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="depreciation_per_hour" step="0.01" min="0"
+                                   value="{{ settings.depreciation_per_hour or 1.50 }}"
+                                   class="input-field pl-10">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label-text">Mão de Obra / hora (R$)</label>
+                        <div class="relative">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="labor_per_hour" step="0.01" min="0"
+                                   value="{{ settings.labor_per_hour or 15 }}"
+                                   class="input-field pl-10">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Margem & Risco -->
+            <div class="card">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl">📊</span>
+                    <h2 class="font-bold text-gray-800 dark:text-white">Margem & Risco</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label-text">Taxa de Risco / Falha (%)</label>
+                        <div class="relative">
+                            <input type="number" id="risk_rate" step="0.1" min="0" max="100"
+                                   value="{{ settings.risk_rate or 5 }}"
+                                   class="input-field pr-8">
+                            <span class="input-suffix">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label-text">Margem de Lucro (%)</label>
+                        <div class="relative">
+                            <input type="number" id="margin_percent" step="0.1" min="0"
+                                   value="{{ settings.margin_percent or 100 }}"
+                                   class="input-field pr-8">
+                            <span class="input-suffix">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================= -->
+            <!--  INSUMOS DE MONTAGEM                                     -->
+            <!-- ======================================================= -->
+            <div class="card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🔩</span>
+                        <h2 class="font-bold text-gray-800 dark:text-white">Insumos de Montagem</h2>
+                        <span id="supply-count"
+                              class="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300
+                                     px-2 py-0.5 rounded-full font-semibold hidden"></span>
+                    </div>
+                    <button type="button" id="add-supply-btn"
+                            class="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30
+                                   text-emerald-600 dark:text-emerald-400 text-xs font-bold
+                                   hover:bg-emerald-100 dark:hover:bg-emerald-900/50
+                                   transition-colors duration-200 flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Adicionar
+                    </button>
+                </div>
+
+                <!-- Container onde as rows serão injetadas -->
+                <div id="supplies-container" class="space-y-3">
+                    <!-- Placeholder quando vazio -->
+                    <div id="supplies-placeholder"
+                         class="text-center py-6 text-gray-400 dark:text-gray-600 text-sm">
+                        <span class="text-2xl block mb-1">📦</span>
+                        Nenhum insumo adicionado.<br>
+                        <span class="text-xs">Clique em "+ Adicionar" para incluir parafusos, colas, etc.</span>
+                    </div>
+                </div>
+
+                <!-- Totalizador -->
+                <div id="supplies-total-bar"
+                     class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700
+                            flex items-center justify-between hidden">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Total Insumos
+                    </span>
+                    <span id="supplies-total-value"
+                          class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                        R$ 0.00
+                    </span>
+                </div>
+            </div>
+
+            <!-- ======================================================= -->
+            <!--  MULTIPLICADOR DE VALOR                                  -->
+            <!-- ======================================================= -->
+            <div class="card">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">💎</span>
+                        <h2 class="font-bold text-gray-800 dark:text-white">Valor Agregado</h2>
+                    </div>
+                    <button type="button" id="value-toggle"
+                            class="relative w-11 h-6 rounded-full bg-gray-200 dark:bg-gray-700
+                                   transition-colors duration-200 focus:outline-none"
+                            aria-pressed="false">
+                        <span class="toggle-dot absolute left-0.5 top-0.5 w-5 h-5 rounded-full
+                                     bg-white shadow transition-transform duration-200"></span>
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">
+                    Ative para peças artísticas ou de alto valor percebido.
+                </p>
+                <div id="value-multiplier-panel" class="hidden">
+                    <label class="label-text">Multiplicador</label>
+                    <div class="relative">
+                        <input type="number" id="value_multiplier_input" step="0.1" min="1" value="1"
+                               class="input-field pr-8">
+                        <span class="input-suffix">×</span>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /col esquerda -->
+
+        <!-- ========== COLUNA DIREITA — RESULTADOS ========== -->
+        <div class="lg:col-span-2 space-y-5">
+
+            <!-- Preço Final Destaque -->
+            <div class="card bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-0 shadow-xl">
+                <p class="text-xs uppercase tracking-widest opacity-80 mb-1">Preço Final Sugerido</p>
+                <p id="res_final_price" class="text-4xl font-black tracking-tight">R$ 0.00</p>
+                <p class="text-xs opacity-70 mt-1">
+                    Margem <span id="margin_label">100%</span>
+                    <span id="mult_label"></span>
+                </p>
+            </div>
+
+            <!-- Reference Prices -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="card text-center py-3">
+                    <p class="text-[10px] uppercase text-gray-400 font-bold">100%</p>
+                    <p id="res_price100" class="text-sm font-extrabold text-gray-700 dark:text-gray-200">R$ 0.00</p>
+                </div>
+                <div class="card text-center py-3">
+                    <p class="text-[10px] uppercase text-gray-400 font-bold">200%</p>
+                    <p id="res_price200" class="text-sm font-extrabold text-gray-700 dark:text-gray-200">R$ 0.00</p>
+                </div>
+                <div class="card text-center py-3">
+                    <p class="text-[10px] uppercase text-gray-400 font-bold">400%</p>
+                    <p id="res_price400" class="text-sm font-extrabold text-gray-700 dark:text-gray-200">R$ 0.00</p>
+                </div>
+            </div>
+
+            <!-- Decomposição do Custo -->
+            <div class="card">
+                <h3 class="font-bold text-gray-800 dark:text-white text-sm mb-3">
+                    📋 Decomposição do Custo
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Filamento</span>
+                        <span id="bd_filament" class="font-semibold text-gray-700 dark:text-gray-300">R$ 0.00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Energia</span>
+                        <span id="bd_energy" class="font-semibold text-gray-700 dark:text-gray-300">R$ 0.00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Depreciação</span>
+                        <span id="bd_depreciation" class="font-semibold text-gray-700 dark:text-gray-300">R$ 0.00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Mão de Obra</span>
+                        <span id="bd_labor" class="font-semibold text-gray-700 dark:text-gray-300">R$ 0.00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Insumos</span>
+                        <span id="bd_supplies" class="font-semibold text-emerald-600 dark:text-emerald-400">R$ 0.00</span>
+                    </div>
+                    <div class="border-t border-gray-100 dark:border-gray-700 pt-2 flex justify-between">
+                        <span class="text-gray-500">Risco / Falha <span id="risk_label">(5%)</span></span>
+                        <span id="bd_risk" class="font-semibold text-orange-500">R$ 0.00</span>
+                    </div>
+                    <div class="border-t-2 border-gray-200 dark:border-gray-600 pt-2 flex justify-between">
+                        <span class="font-bold text-gray-800 dark:text-white">CUSTO TOTAL</span>
+                        <span id="bd_total" class="font-extrabold text-gray-800 dark:text-white">R$ 0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================= -->
+            <!--  SIMULADOR DE REVENDA / ATACADO                          -->
+            <!-- ======================================================= -->
+            <div class="card border-l-4 border-l-purple-500">
+                <h3 class="font-bold text-gray-800 dark:text-white text-sm mb-4 flex items-center gap-2">
+                    <span class="text-lg">🏪</span> Simulador de Revenda / Atacado
+                </h3>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="label-text">Preço Mercado (Varejo)</label>
+                        <div class="relative">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="sim_retail_price" step="0.01" min="0"
+                                   placeholder="0.00" class="input-field pl-10">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label-text">Sua Oferta (Atacado)</label>
+                        <div class="relative">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="sim_wholesale_price" step="0.01" min="0"
+                                   placeholder="0.00" class="input-field pl-10">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 text-center">
+                        <p class="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mb-1">
+                            Seu Lucro / Peça
+                        </p>
+                        <p id="sim_your_profit" class="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
+                            R$ 0.00
+                        </p>
+                    </div>
+                    <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3 text-center">
+                        <p class="text-[10px] uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold mb-1">
+                            Lucro Revendedor
+                        </p>
+                        <p id="sim_reseller_profit" class="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">
+                            R$ 0.00
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Visual bars -->
+                <div class="space-y-2 mb-3">
+                    <div class="h-6 bg-gray-100 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                        <div id="sim_your_bar"
+                             class="h-full rounded-full bg-emerald-500 flex items-center justify-center
+                                    text-[10px] font-bold text-white transition-all duration-500"
+                             style="width: 0%"></div>
+                    </div>
+                    <div class="h-6 bg-gray-100 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                        <div id="sim_reseller_bar"
+                             class="h-full rounded-full bg-indigo-500 flex items-center justify-center
+                                    text-[10px] font-bold text-white transition-all duration-500"
+                             style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Alert -->
+                <div id="sim_alert"
+                     class="hidden items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20
+                            text-red-600 dark:text-red-400 text-xs font-semibold">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                              clip-rule="evenodd"/>
+                    </svg>
+                    ⚠️ Preço de atacado abaixo do custo! Você terá prejuízo.
+                </div>
+            </div>
+
+            <!-- ======================================================= -->
+            <!--  TABELA DE DESCONTOS POR VOLUME                          -->
+            <!-- ======================================================= -->
+            <div class="card">
+                <h3 class="font-bold text-gray-800 dark:text-white text-sm mb-3 flex items-center gap-2">
+                    <span class="text-lg">📦</span> Descontos por Volume
+                </h3>
+
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <th class="text-left py-2 px-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Faixa</th>
+                            <th class="text-center py-2 px-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Desconto</th>
+                            <th class="text-right py-2 px-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Preço/Un</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                            <td class="py-2.5 px-3 text-gray-600 dark:text-gray-300 font-medium">1–10 un</td>
+                            <td class="py-2.5 px-3 text-center">
+                                <span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700
+                                             text-xs font-bold text-gray-500 dark:text-gray-400">Varejo</span>
+                            </td>
+                            <td id="vol_tier1" class="py-2.5 px-3 text-right font-extrabold text-gray-700 dark:text-gray-200">R$ 0.00</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                            <td class="py-2.5 px-3 text-gray-600 dark:text-gray-300 font-medium">11–30 un</td>
+                            <td class="py-2.5 px-3 text-center">
+                                <span class="inline-block px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30
+                                             text-xs font-bold text-yellow-600 dark:text-yellow-400">-15%</span>
+                            </td>
+                            <td id="vol_tier2" class="py-2.5 px-3 text-right font-extrabold text-yellow-600 dark:text-yellow-400">R$ 0.00</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                            <td class="py-2.5 px-3 text-gray-600 dark:text-gray-300 font-medium">40+ un</td>
+                            <td class="py-2.5 px-3 text-center">
+                                <span id="vol_tier3_badge"
+                                      class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30
+                                             text-xs font-bold text-emerald-600 dark:text-emerald-400">-30%</span>
+                            </td>
+                            <td id="vol_tier3" class="py-2.5 px-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400">R$ 0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div><!-- /col direita -->
+    </div><!-- /grid -->
+</div>
+{% endblock %}
+

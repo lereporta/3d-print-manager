@@ -51,13 +51,15 @@
         <table class="w-full text-sm">
             <thead>
                 <tr class="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                    <th class="py-3 px-3 text-left">Data/Hora</th>
+                    <th class="py-3 px-3 text-left">Data</th>
                     <th class="py-3 px-3 text-left">Peça</th>
                     <th class="py-3 px-3 text-right">Peso</th>
                     <th class="py-3 px-3 text-right">Tempo</th>
+                    <th class="py-3 px-3 text-right">Insumos</th>
                     <th class="py-3 px-3 text-right">Custo</th>
                     <th class="py-3 px-3 text-center">Risco</th>
                     <th class="py-3 px-3 text-center">Margem</th>
+                    <th class="py-3 px-3 text-center">Multi.</th>
                     <th class="py-3 px-3 text-right">Preço Final</th>
                     <th class="py-3 px-3 text-center">Ação</th>
                 </tr>
@@ -72,9 +74,23 @@
                     <td class="py-3 px-3 font-semibold">{{ b.piece_name }}</td>
                     <td class="py-3 px-3 text-right">{{ "%.1f"|format(b.piece_weight_g) }}g</td>
                     <td class="py-3 px-3 text-right">{{ "%.1f"|format(b.print_time_h) }}h</td>
+                    <td class="py-3 px-3 text-right">
+                        {% if b.supplies_cost and b.supplies_cost > 0 %}
+                            <span class="text-amber-500 font-semibold">R$ {{ "%.2f"|format(b.supplies_cost) }}</span>
+                        {% else %}
+                            <span class="text-gray-400">—</span>
+                        {% endif %}
+                    </td>
                     <td class="py-3 px-3 text-right font-bold text-indigo-500">R$ {{ "%.2f"|format(b.total_cost) }}</td>
                     <td class="py-3 px-3 text-center"><span class="badge badge-pending">{{ "%.0f"|format(b.risk_rate) }}%</span></td>
                     <td class="py-3 px-3 text-center"><span class="badge badge-printing">{{ "%.0f"|format(b.margin_percent) }}%</span></td>
+                    <td class="py-3 px-3 text-center">
+                        {% if b.value_multiplier and b.value_multiplier > 1 %}
+                            <span class="badge badge-urgent">{{ b.value_multiplier }}×</span>
+                        {% else %}
+                            <span class="text-gray-400">1×</span>
+                        {% endif %}
+                    </td>
                     <td class="py-3 px-3 text-right font-bold text-emerald-500">R$ {{ "%.2f"|format(b.final_price) }}</td>
                     <td class="py-3 px-3 text-center">
                         <form method="POST" action="/history/delete/{{ b.id }}" onsubmit="return confirmDelete('Remover este orçamento?');" style="display:inline">

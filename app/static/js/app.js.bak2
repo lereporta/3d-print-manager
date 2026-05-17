@@ -1,0 +1,642 @@
+// ===================================================================
+//  3D Print Manager — Frontend Logic v4.2 (All Bugs Fixed)
+// ===================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initMobileMenu();
+    initLocalStoragePersistence();
+    initSupplies();
+    initValueMultiplier();
+    initSimulator();
+    initCalculator();
+    initToasts();
+    initButtonFeedback();
+
+    // First full calculation pass on load
+    calculate();
+
+    // Remove initial transition block
+    requestAnimationFrame(() => {
+        document.body.classList.remove('no-transitions');
+    });
+});
+
+// ===================================================================
+//  THEME
+// ===================================================================
+function initTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') {
+        document.documentElement.classList.add('dark');
+    } else if (saved === 'light') {
+        document.documentElement.classList.remove('dark');
+    }
+
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+    });
+}
+
+// ===================================================================
+//  MOBILE MENU
+// ===================================================================
+function initMobileMenu() {
+    const btn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!btn || !sidebar) return;
+
+    btn.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        if (overlay) overlay.classList.toggle('hidden');
+    });
+
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.add('hidden');
+        });
+    }
+}
+
+// ===================================================================
+//  LOCALSTORAGE PERSISTENCE
+// ===================================================================
+function initLocalStoragePersistence() {
+    const persistFields = [
+        { id: 'filament_price_kg', key: 'pm_filament_price_kg' },
+        { id: 'depreciation_per_hour', key: 'pm_depreciation_per_hour' },
+        { id: 'labor_per_hour', key: 'pm_labor_per_hour' },
+        { id: 'risk_rate', key: 'pm_risk_rate' },
+        { id: 'margin_percent', key: 'pm_margin_percent' },
+    ];
+
+    persistFields.forEach(({ id, key }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const saved = localStorage.getItem(key);
+        if (saved !== null && saved !== '') {
+            el.value = saved;
+        }
+
+        el.addEventListener('input', () => {
+            localStorage.setItem(key, el.value);
+        });
+    });
+}
+
+// ===================================================================
+//  SUPPLIES (Insumos de Montagem)
+// ===================================================================
+let supplyCounter = 0;
+
+function initSupplies() {
+    const addBtn = document.getElementById('add-supply-btn');
+    if (!addBtn) {
+        console.warn('[Supplies] Botão add-supply-btn não encontrado');
+        return;
+    }
+
+    const newBtn = addBtn.cloneNode(true);
+    addBtn.parentNode.replaceChild(newBtn, addBtn);
+
+    newBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        addSupplyRow();
+    });
+
+    console.log('[Supplies] Inicializado com sucesso');
+}
+
+function addSupplyRow() {
+    supplyCounter++;
+    const container = document.getElementById('supplies-container');
+    if (!container) {
+        console.error('[Supplies] Container não encontrado');
+        return;
+    }
+
+    const rowId = `supply-row-${supplyCounter}`;
+    const row = document.createElement('div');
+    row.className = 'supply-row';
+    row.id = rowId;
+    row.setAttribute('data-supply-row', 'true');
+
+    row.innerHTML = `
+        <div>
+            <label class="block text-xs font-semibold mb-1 text-gray-500">Insumo</label>
+            <input type="text" placeholder="Ex: Argola chaveiro"
+                   class="input-field text-xs py-1.5" data-supply="name">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1 text-gray-500">Custo Pacote</label>
+            <div class="input-group">
+                <span class="input-prefix">R$</span>
+                <input type="number" step="0.01" min="0" value="0"
+                       class="input-field has-prefix text-xs py-1.5"
+                       data-supply="package_cost">
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1 text-gray-500">Qtd Pacote</label>
+            <input type="number" step="1" min="1" value="1"
+                   class="input-field text-xs py-1.5"
+                   data-supply="package_qty">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1 text-gray-500">Qtd/Peça</label>
+            <input type="number" step="1" min="0" value="1"
+                   class="input-field text-xs py-1.5"
+                   data-supply="per_piece">
+        </div>
+        <div class="flex items-end pb-1">
+            <button type="button"
+                    class="supply-remove-btn p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600"
+                    data-remove-row="${rowId}"
+                    title="Remover insumo">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    `;
+
+    container.appendChild(row);
+
+    const inputs = row.querySelectorAll('input[type="number"]');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            recalculateAllSupplies();
+        });
+    });
+
+    const removeBtn = row.querySelector('.supply-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = removeBtn.getAttribute('data-remove-row');
+            const targetRow = document.getElementById(targetId);
+            if (targetRow) {
+                targetRow.remove();
+            }
+            updateSuppliesPlaceholder();
+            recalculateAllSupplies();
+        });
+    }
+
+    updateSuppliesPlaceholder();
+    recalculateAllSupplies();
+
+    console.log(`[Supplies] Linha ${rowId} adicionada`);
+}
+
+function updateSuppliesPlaceholder() {
+    const container = document.getElementById('supplies-container');
+    const placeholder = document.getElementById('supplies-placeholder');
+    const totalBar = document.getElementById('supplies-total-bar');
+    const badge = document.getElementById('supply-count');
+    if (!container) return;
+
+    const rowCount = container.querySelectorAll('[data-supply-row]').length;
+
+    if (placeholder) {
+        placeholder.style.display = rowCount === 0 ? 'block' : 'none';
+    }
+    if (totalBar) {
+        totalBar.classList.toggle('hidden', rowCount === 0);
+    }
+    if (badge) {
+        badge.textContent = rowCount > 0 ? `${rowCount} insumo${rowCount !== 1 ? 's' : ''}` : '';
+        badge.classList.toggle('hidden', rowCount === 0);
+    }
+}
+
+function recalculateAllSupplies() {
+    const container = document.getElementById('supplies-container');
+    if (!container) return;
+
+    const rows = container.querySelectorAll('[data-supply-row]');
+    let totalSupplyCost = 0;
+
+    rows.forEach(row => {
+        const pkgCostInput = row.querySelector('[data-supply="package_cost"]');
+        const pkgQtyInput = row.querySelector('[data-supply="package_qty"]');
+        const perPieceInput = row.querySelector('[data-supply="per_piece"]');
+
+        const pkgCost = parseFloat(pkgCostInput?.value) || 0;
+        const pkgQty = parseFloat(pkgQtyInput?.value) || 1;
+        const perPiece = parseFloat(perPieceInput?.value) || 0;
+
+        const unitCost = pkgQty > 0 ? (pkgCost / pkgQty) : 0;
+        const supplyCost = unitCost * perPiece;
+        totalSupplyCost += supplyCost;
+    });
+
+    // Update hidden tracker field
+    const hiddenField = document.getElementById('supplies_cost');
+    if (hiddenField) {
+        hiddenField.value = totalSupplyCost.toFixed(4);
+    }
+
+    // Update supplies total bar display
+    const stv = document.getElementById('supplies-total-value');
+    if (stv) {
+        stv.textContent = formatCurrency(totalSupplyCost);
+    }
+
+    // Trigger full recalculation
+    calculate();
+
+    console.log(`[Supplies] Total recalculado: R$ ${totalSupplyCost.toFixed(2)}`);
+}
+
+// ===================================================================
+//  VALUE MULTIPLIER (Peça Técnica)
+// ===================================================================
+function initValueMultiplier() {
+    const toggle = document.getElementById('value-toggle');
+    const panel = document.getElementById('value-multiplier-panel');
+    const input = document.getElementById('value_multiplier_input');
+    const hidden = document.getElementById('value_multiplier');
+
+    if (!toggle || !panel) {
+        console.warn('[ValueMultiplier] Toggle ou panel não encontrado');
+        return;
+    }
+
+    toggle.addEventListener('click', () => {
+        const isActive = toggle.classList.toggle('active');
+        panel.style.display = isActive ? 'block' : 'none';
+
+        if (!isActive) {
+            if (input) input.value = '1';
+            if (hidden) hidden.value = '1';
+        } else {
+            // Ao ativar, sincronizar o valor atual
+            if (hidden && input) hidden.value = input.value;
+        }
+        calculate();
+    });
+
+    if (input) {
+        input.addEventListener('input', () => {
+            let val = parseFloat(input.value) || 1;
+            if (val < 1) val = 1;
+            if (hidden) hidden.value = val;
+            calculate();
+        });
+    }
+
+    console.log('[ValueMultiplier] Inicializado');
+}
+
+// ===================================================================
+//  SIMULATOR (Revenda / Atacado)
+// ===================================================================
+function initSimulator() {
+    const retailInput = document.getElementById('sim_retail_price');
+    const wholesaleInput = document.getElementById('sim_wholesale_price');
+
+    if (retailInput) {
+        retailInput.addEventListener('input', () => updateSimulator());
+    }
+    if (wholesaleInput) {
+        wholesaleInput.addEventListener('input', () => updateSimulator());
+    }
+}
+
+function updateSimulator() {
+    const totalCostHidden = document.getElementById('calc_total_cost');
+    const totalCost = parseFloat(totalCostHidden?.value) || 0;
+
+    const retailPrice = parseFloat(document.getElementById('sim_retail_price')?.value) || 0;
+    const wholesalePrice = parseFloat(document.getElementById('sim_wholesale_price')?.value) || 0;
+
+    const yourProfit = wholesalePrice - totalCost;
+    const resellerProfit = retailPrice - wholesalePrice;
+
+    // Update profit displays
+    const yourProfitEl = document.getElementById('sim_your_profit');
+    if (yourProfitEl) {
+        yourProfitEl.textContent = formatCurrency(yourProfit);
+        yourProfitEl.className = yourProfit >= 0
+            ? 'text-lg font-extrabold text-emerald-500'
+            : 'text-lg font-extrabold text-red-500';
+    }
+
+    const resellerProfitEl = document.getElementById('sim_reseller_profit');
+    if (resellerProfitEl) {
+        resellerProfitEl.textContent = formatCurrency(resellerProfit);
+        resellerProfitEl.className = resellerProfit >= 0
+            ? 'text-lg font-extrabold text-indigo-500'
+            : 'text-lg font-extrabold text-red-500';
+    }
+
+    // Alert
+    const alertEl = document.getElementById('sim_alert');
+    if (alertEl) {
+        if (wholesalePrice > 0 && wholesalePrice < totalCost) {
+            alertEl.style.display = 'flex';
+        } else {
+            alertEl.style.display = 'none';
+        }
+    }
+
+    // Visual Bars
+    const maxVal = Math.max(Math.abs(yourProfit), Math.abs(resellerProfit), 1);
+    const hasInput = retailPrice > 0 || wholesalePrice > 0;
+
+    const yourBar = document.getElementById('sim_your_bar');
+    if (yourBar) {
+        const pct = Math.max(5, Math.min(100, (Math.abs(yourProfit) / maxVal) * 100));
+        yourBar.style.width = hasInput ? pct + '%' : '0%';
+        yourBar.className = 'sim-bar ' + (yourProfit >= 0 ? 'profit' : 'loss');
+        yourBar.textContent = hasInput ? formatCurrency(yourProfit) : '';
+    }
+
+    const resellerBar = document.getElementById('sim_reseller_bar');
+    if (resellerBar) {
+        const pct = Math.max(5, Math.min(100, (Math.abs(resellerProfit) / maxVal) * 100));
+        resellerBar.style.width = hasInput ? pct + '%' : '0%';
+        resellerBar.className = 'sim-bar ' + (resellerProfit >= 0 ? 'reseller' : 'loss');
+        resellerBar.textContent = hasInput ? formatCurrency(resellerProfit) : '';
+    }
+
+    // Cascade to volume table
+    updateVolumeTable();
+}
+
+// ===================================================================
+//  VOLUME DISCOUNT TABLE
+// ===================================================================
+function updateVolumeTable() {
+    const finalPrice = _lastFinalPrice || 0;
+    const wholesalePrice = parseFloat(document.getElementById('sim_wholesale_price')?.value) || 0;
+
+    const tier1Price = finalPrice;
+    const tier2Price = finalPrice * 0.85;
+    const tier3Price = wholesalePrice > 0 ? wholesalePrice : (finalPrice * 0.70);
+
+    // FIX Bug 2: IDs corretos (vol_tier1, vol_tier2, vol_tier3)
+    setTextSafe('vol_tier1', formatCurrency(tier1Price));
+    setTextSafe('vol_tier2', formatCurrency(tier2Price));
+    setTextSafe('vol_tier3', formatCurrency(tier3Price));
+
+    // Badge dinâmico tier 3
+    const badge = document.getElementById('vol_tier3_badge');
+    if (badge) {
+        if (wholesalePrice > 0 && finalPrice > 0) {
+            const discountPct = ((finalPrice - wholesalePrice) / finalPrice) * 100;
+            badge.textContent = `-${discountPct.toFixed(0)}%`;
+        } else {
+            badge.textContent = '-30%';
+        }
+    }
+}
+
+// ===================================================================
+//  MAIN CALCULATOR
+// ===================================================================
+let _lastFinalPrice = 0;
+let _lastTotalCost = 0;
+
+function initCalculator() {
+    const reactiveFields = [
+        'filament_price_kg',
+        'piece_weight_g',
+        'print_hours',
+        'print_minutes',
+        'manual_hours',
+        'manual_minutes',
+        'depreciation_per_hour',
+        'labor_per_hour',
+        'risk_rate',
+        'margin_percent',
+    ];
+
+    reactiveFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) {
+            console.warn(`[Calculator] Campo ${id} não encontrado`);
+            return;
+        }
+
+        el.addEventListener('input', () => {
+            calculate();
+        });
+
+        if (id.includes('minutes')) {
+            el.addEventListener('blur', function () {
+                let v = parseInt(this.value) || 0;
+                if (v > 59) this.value = 59;
+                if (v < 0) this.value = 0;
+                calculate();
+            });
+        }
+    });
+
+    console.log('[Calculator] Inicializado');
+}
+
+function calculate() {
+    // ---- Gather inputs ----
+    const filamentPriceKg = getNum('filament_price_kg');
+    const pieceWeightG    = getNum('piece_weight_g');
+    const printTimeH      = getTimeInHours('print_hours', 'print_minutes');
+    const manualTimeH     = getTimeInHours('manual_hours', 'manual_minutes');
+    const depreciationH   = getNum('depreciation_per_hour');
+    const laborH          = getNum('labor_per_hour');
+    const riskRate        = getNum('risk_rate');
+    const marginPercent   = getNum('margin_percent');
+    const suppliesCost    = parseFloat(document.getElementById('supplies_cost')?.value) || 0;
+    const valueMultiplier = Math.max(parseFloat(document.getElementById('value_multiplier')?.value) || 1, 1);
+
+    // ---- Constants ----
+    const energyTariff       = 0.85;
+    const printerConsumption = 0.12;
+
+    // ---- Calculate costs ----
+    const filamentCost     = (pieceWeightG / 1000) * filamentPriceKg;
+    const energyCost       = printTimeH * printerConsumption * energyTariff;
+    const depreciationCost = printTimeH * depreciationH;
+    const laborCost        = manualTimeH * laborH;
+
+    const subtotal = filamentCost + energyCost + depreciationCost + laborCost + suppliesCost;
+    const riskCost = subtotal * (riskRate / 100);
+    const totalCost = subtotal + riskCost;
+
+    // ---- Final prices ----
+    const mult = valueMultiplier;
+    const finalPrice = totalCost * (1 + marginPercent / 100) * mult;
+    const price100   = totalCost * 2 * mult;
+    const price200   = totalCost * 3 * mult;
+    const price400   = totalCost * 5 * mult;
+
+    // Store in internal trackers
+    _lastFinalPrice = finalPrice;
+    _lastTotalCost = totalCost;
+
+    // ---- Update internal hidden trackers ----
+    setHiddenVal('print_time_h', printTimeH.toFixed(4));
+    setHiddenVal('manual_time_h', manualTimeH.toFixed(4));
+    setHiddenVal('calc_total_cost', totalCost.toFixed(4));
+
+    // ---- FIX Bug 1: IDs corretos (bd_*) ----
+    setTextSafe('bd_filament',     formatCurrency(filamentCost));
+    setTextSafe('bd_energy',       formatCurrency(energyCost));
+    setTextSafe('bd_depreciation', formatCurrency(depreciationCost));
+    setTextSafe('bd_labor',        formatCurrency(laborCost));
+    setTextSafe('bd_supplies',     formatCurrency(suppliesCost));
+    setTextSafe('bd_risk',         formatCurrency(riskCost));
+    setTextSafe('bd_total',        formatCurrency(totalCost));
+
+    // ---- Update final price cards ----
+    setTextSafe('res_final_price', formatCurrency(finalPrice));
+    setTextSafe('res_price100', formatCurrency(price100));
+    setTextSafe('res_price200', formatCurrency(price200));
+    setTextSafe('res_price400', formatCurrency(price400));
+
+    // ---- Update dynamic labels ----
+    setTextSafe('risk_label', `(${riskRate}%)`);
+    setTextSafe('margin_label', `${marginPercent}%`);
+
+    const multLabel = document.getElementById('mult_label');
+    if (multLabel) {
+        multLabel.textContent = mult > 1 ? ` × ${mult}x` : '';
+    }
+
+    // ---- Update time display labels ----
+    setTimeLabel('print_time_label', printTimeH);
+    setTimeLabel('manual_time_label', manualTimeH);
+
+    // ---- FIX Bug 4: Populate form hidden fields for submission ----
+    setHiddenVal('h_piece_name',        document.getElementById('piece_name_input')?.value || '');
+    setHiddenVal('h_total_cost',        totalCost.toFixed(2));
+    setHiddenVal('h_final_price',       finalPrice.toFixed(2));
+    setHiddenVal('h_filament_cost',     filamentCost.toFixed(2));
+    setHiddenVal('h_energy_cost',       energyCost.toFixed(2));
+    setHiddenVal('h_depreciation_cost', depreciationCost.toFixed(2));
+    setHiddenVal('h_labor_cost',        laborCost.toFixed(2));
+    setHiddenVal('h_supplies_cost',     suppliesCost.toFixed(2));
+    setHiddenVal('h_print_time',        printTimeH.toFixed(2));
+
+    // ---- Cascade ----
+    updateSimulator();
+    updateVolumeTable();
+}
+
+// ===================================================================
+//  HELPER FUNCTIONS
+// ===================================================================
+function getNum(id) {
+    const el = document.getElementById(id);
+    if (!el) return 0;
+    const val = parseFloat(el.value);
+    return isNaN(val) ? 0 : val;
+}
+
+function getTimeInHours(hoursId, minutesId) {
+    const h = getNum(hoursId);
+    const m = getNum(minutesId);
+    return h + (m / 60);
+}
+
+function formatCurrency(value) {
+    const abs = Math.abs(value);
+    const formatted = abs.toFixed(2);
+    const prefix = value < 0 ? '-R$ ' : 'R$ ';
+    return prefix + formatted;
+}
+
+function setTextSafe(id, text) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.textContent = text;
+    }
+}
+
+function setHiddenVal(id, value) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.value = value;
+    }
+}
+
+function setTimeLabel(id, decimalHours) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const h = Math.floor(decimalHours);
+    const m = Math.round((decimalHours - h) * 60);
+    if (h === 0 && m === 0) {
+        el.textContent = '';
+    } else if (h === 0) {
+        el.textContent = `= ${m}min`;
+    } else if (m === 0) {
+        el.textContent = `= ${h}h`;
+    } else {
+        el.textContent = `= ${h}h ${m}min`;
+    }
+}
+
+// ===================================================================
+//  TOASTS
+// ===================================================================
+function initToasts() {
+    const params = new URLSearchParams(window.location.search);
+    let msg = null;
+
+    if (params.has('saved'))          msg = '✅ Orçamento salvo com sucesso!';
+    if (params.has('deleted'))        msg = '🗑️ Item removido!';
+    if (params.has('cleared'))        msg = '🧹 Histórico limpo!';
+    if (params.has('added'))          msg = '✅ Item adicionado!';
+    if (params.has('settings_saved')) msg = '⚙️ Configurações atualizadas!';
+
+    if (msg) {
+        showToast(msg);
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+    }, 3200);
+}
+
+// ===================================================================
+//  BUTTON FEEDBACK
+// ===================================================================
+function initButtonFeedback() {
+    document.querySelectorAll('.btn').forEach(btn => {
+        btn.addEventListener('mousedown', () => {
+            btn.style.transform = 'scale(0.95)';
+        });
+        btn.addEventListener('mouseup', () => {
+            btn.style.transform = '';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.transform = '';
+        });
+    });
+}
+
+// ===================================================================
+//  CONFIRM DIALOGS
+// ===================================================================
+function confirmDelete(msg) {
+    return confirm(msg || 'Tem certeza que deseja remover este item?');
+}
+
+function confirmClear() {
+    return confirm('⚠️ Isso removerá TODOS os orçamentos do histórico. Continuar?');
+}
