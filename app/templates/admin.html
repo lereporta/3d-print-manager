@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Painel Admin{% endblock %}
+{% block page_title %}👑 Painel Administrativo{% endblock %}
+
+{% block content %}
+<div id="admin-loading" class="text-center py-12 text-gray-400">Carregando...</div>
+<div id="admin-content" class="space-y-6 hidden">
+
+  <!-- MÉTRICAS -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="metric-card"><div class="metric-label">Usuários</div><div id="m-users" class="metric-value">—</div></div>
+    <div class="metric-card"><div class="metric-label">Orçamentos</div><div id="m-budgets" class="metric-value">—</div></div>
+    <div class="metric-card"><div class="metric-label">Ticket Médio</div><div id="m-ticket" class="metric-value">—</div></div>
+    <div class="metric-card"><div class="metric-label">Margem Média</div><div id="m-margin" class="metric-value">—</div></div>
+    <div class="metric-card"><div class="metric-label">Receita Total</div><div id="m-revenue" class="metric-value">—</div></div>
+  </div>
+
+  <!-- 🔑 SOLICITAÇÕES DE SENHA (área crítica) -->
+  <div class="card border-l-4 border-amber-500">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-lg font-bold">🔑 Solicitações de Recuperação de Senha</h3>
+      <span id="reset-count" class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">0</span>
+    </div>
+    <p class="text-xs text-gray-500 mb-3">Copie o link e envie ao usuário manualmente. Marque como resolvido após enviar.</p>
+    <div id="reset-list" class="space-y-2"></div>
+  </div>
+
+  <!-- 🚨 INVENTÁRIO -->
+  <div class="card border-l-4 border-red-500">
+    <h3 class="text-lg font-bold mb-3">🚨 Carretéis com menos de 10%</h3>
+    <div id="low-spools" class="space-y-2"></div>
+  </div>
+
+  <!-- 💬 FEEDBACKS -->
+  <div class="card">
+    <h3 class="text-lg font-bold mb-3">💬 Feedbacks dos usuários</h3>
+    <div id="feedbacks-list" class="space-y-2 max-h-96 overflow-y-auto"></div>
+  </div>
+
+  <!-- 📊 TELEMETRIA -->
+  <div class="card">
+    <h3 class="text-lg font-bold mb-3">📊 Top Ações (Telemetria)</h3>
+    <div id="top-actions" class="grid grid-cols-2 md:grid-cols-5 gap-2"></div>
+  </div>
+
+  <!-- 👥 USUÁRIOS -->
+  <div class="card">
+    <h3 class="text-lg font-bold mb-3">👥 Usuários da plataforma</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase text-gray-500 border-b">
+          <tr><th class="p-2 text-left">Nome</th><th class="p-2 text-left">E-mail</th><th class="p-2 text-center">Admin</th><th class="p-2 text-center">Orçamentos</th><th class="p-2 text-center">Desde</th></tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  .card { background: white; border-radius: 1rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .dark .card { background: #1e293b; }
+  .metric-card { background: white; border-radius: .75rem; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .dark .metric-card { background: #1e293b; }
+  .metric-label { font-size: .7rem; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  .metric-value { font-size: 1.5rem; font-weight: 800; color: #6366f1; margin-top: .25rem; }
+</style>
+
+<script src="/static/js/admin.js"></script>
+{% endblock %}
+

@@ -25,6 +25,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- Auth Guard (Carregado antes de qualquer fetch) -->
+    <script src="/static/js/auth-guard.js"></script>
 </head>
 <body class="font-['Inter'] bg-slate-900 text-slate-100 no-transitions">
 
@@ -66,6 +69,23 @@
             <a href="/inventory/" class="nav-item {% if active_page == 'inventory' %}active{% endif %}">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 Inventário
+            </a>
+
+            <!-- Dentro de <nav>, após "Gestão" -->
+            <div id="admin-nav-section" style="display:none;">
+                <span class="block px-3 pt-4 pb-2 text-xs font-bold uppercase tracking-wider text-amber-500">Administração</span>
+                <a href="/admin" class="nav-item {% if active_page == 'admin' %}active{% endif %}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    Painel Admin
+                </a>
+            </div>
+
+            <!-- Logout -->
+            <a href="#" onclick="logout(); return false;" class="nav-item text-red-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Sair
             </a>
         </nav>
 
@@ -114,6 +134,21 @@
         setInterval(updateClock, 30000);
     </script>
     {% block scripts %}{% endblock %}
+
+    <!-- Scripts de Feedback, Admin e Avatar -->
+    <script src="/static/js/feedback-widget.js"></script>
+    <script>
+      // Mostra link admin se o usuário for admin
+      if (window.__USER__?.is_admin) {
+          const sec = document.getElementById('admin-nav-section');
+          if (sec) sec.style.display = '';
+      }
+      // Atualiza inicial do usuário no header
+      const avatar = document.querySelector('header .rounded-full');
+      if (avatar && window.__USER__?.name) {
+          avatar.textContent = window.__USER__.name.charAt(0).toUpperCase();
+          avatar.title = window.__USER__.name;
+      }
+    </script>
 </body>
 </html>
-

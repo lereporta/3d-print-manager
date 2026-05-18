@@ -1,16 +1,22 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"
-)
-os.makedirs(DATABASE_DIR, exist_ok=True)
+from app.config import get_settings
 
-DATABASE_URL = f"sqlite:///{os.path.join(DATABASE_DIR, 'print_manager.db')}"
+settings = get_settings()
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Garantir que o diretório do SQLite exista
+if settings.database_url.startswith("sqlite"):
+    db_file = settings.database_url.replace("sqlite:///", "")
+    db_dir = os.path.dirname(db_file)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+
+engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 
 
@@ -22,31 +28,9 @@ def get_db():
         db.close()
 
 
-def init_db():
-    from app.models import Budget, PrintJob, Settings, Spool
+def init_db() -> None:
+    # Garante a importação dos modelos para registrá-los no metadata antes da criação
+    from app import models  # noqa: F401
 
+    # Cria apenas as tabelas que ainda não existem no banco de dados
     Base.metadata.create_all(bind=engine)
-
-    db = SessionLocal()
-    try:
-        existing = db.query(Settings).first()
-        if not existing:
-            defaults = Settings(
-                filament_price_kg=120.00,
-                energy_tariff=0.85,
-                printer_consumption=0.12,
-                depreciation_per_hour=2.00,
-                labor_per_hour=30.00,
-                risk_rate=10.0,
-                machine_cost=0.0,
-            )
-            db.add(defaults)
-            db.commit()
-        else:
-            # Migrate: add machine_cost if column missing in old DB
-            if not hasattr(existing, "machine_cost") or existing.machine_cost is None:
-                existing.machine_cost = 0.0
-                db.commit()
-    finally:
-        db.close()
-

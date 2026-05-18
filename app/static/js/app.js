@@ -1,11 +1,145 @@
-// ===== 3D Print Manager - Frontend Logic v5 (dashboard.html) =====
-// Compatível com a estrutura do dashboard.html
+// ═══════════════════════════════════════════════════════════════
+//  RELOAD DE ORÇAMENTO via sessionStorage (vindo do Histórico)
+//  Lê os dados salvos, preenche os campos e marca como "edição"
+// ═══════════════════════════════════════════════════════════════
+(function reloadFromSession() {
+    const raw = sessionStorage.getItem('reload_budget');
+    if (!raw) return;
+    sessionStorage.removeItem('reload_budget'); // só uma vez
+
+    let d;
+    try { d = JSON.parse(raw); } catch (e) { console.error('[reload] JSON inválido', e); return; }
+    if (!d || !d.id) return;
+
+    console.log('[reload] preenchendo orçamento ID', d.id, d);
+
+    // Aguarda DOM pronto
+    const fill = () => {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val !== undefined && val !== null) el.value = val;
+        };
+
+        // Campos básicos
+        setVal('piece_name_input', d.piece_name || '');
+        setVal('print_time_h', Math.floor(d.print_time_h || 0));
+        setVal('print_time_min', Math.round(((d.print_time_h || 0) % 1) * 60));
+        setVal('manual_time_h', Math.floor(d.manual_time_h || 0));
+        setVal('manual_time_min', Math.round(((d.manual_time_h || 0) % 1) * 60));
+        setVal('depreciation_per_hour', d.depreciation_per_hour);
+        setVal('labor_per_hour', d.labor_per_hour);
+        setVal('risk_rate', d.risk_rate);
+        setVal('margin_percent', d.margin_percent);
+        setVal('value_multiplier', d.value_multiplier);
+        setVal('lot_quantity', d.lot_quantity || 1);
+
+        // ── FILAMENTOS ──
+        if (Array.isArray(d.filaments) && d.filaments.length) {
+            // Remove filamentos existentes (exceto o primeiro placeholder)
+            const filContainer = document.getElementById('filaments-container') || document.querySelector('[data-filaments-container]');
+            const addFilBtn = document.querySelector('[data-add-filament], #btn-add-filament, button[onclick*="addFilament"]');
+
+            // Limpa filamentos atuais
+            if (filContainer) {
+                const existing = filContainer.querySelectorAll('.filament-row, [data-filament-row]');
+                existing.forEach((row, i) => { if (i > 0) row.remove(); });
+            }
+
+            d.filaments.forEach((f, idx) => {
+                if (idx > 0 && addFilBtn) addFilBtn.click();
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('.filament-row, [data-filament-row]');
+                    const row = rows[idx];
+                    if (!row) return;
+                    const priceInput = row.querySelector('[name*="price"], [data-filament-price]');
+                    const weightInput = row.querySelector('[name*="weight"], [data-filament-weight]');
+                    if (priceInput) priceInput.value = f.price_kg || 0;
+                    if (weightInput) weightInput.value = f.weight_g || 0;
+                    priceInput?.dispatchEvent(new Event('input', { bubbles: true }));
+                    weightInput?.dispatchEvent(new Event('input', { bubbles: true }));
+                }, 100 * (idx + 1));
+            });
+        }
+
+        // ── INSUMOS ──
+        if (Array.isArray(d.supplies) && d.supplies.length) {
+            const addSupBtn = document.querySelector('[data-add-supply], #btn-add-supply, button[onclick*="addSupply"]');
+            d.supplies.forEach((s, idx) => {
+                if (addSupBtn) addSupBtn.click();
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('.supply-row, [data-supply-row]');
+                    const row = rows[idx];
+                    if (!row) return;
+                    const nameI = row.querySelector('[name*="name"], [data-supply-name]');
+                    const priceI = row.querySelector('[name*="price"], [data-supply-price]');
+                    const qtyI = row.querySelector('[name*="qty"], [data-supply-qty]');
+                    const useI = row.querySelector('[name*="use"], [data-supply-use]');
+                    if (nameI) nameI.value = s.name || '';
+                    if (priceI) priceI.value = s.price || 0;
+                    if (qtyI) qtyI.value = s.qty_pack || 1;
+                    if (useI) useI.value = s.use || 1;
+                    [nameI, priceI, qtyI, useI].forEach(el => el?.dispatchEvent(new Event('input', { bubbles: true })));
+                }, 100 * (idx + 1));
+            });
+        }
+
+        // ── MARCA COMO EDIÇÃO (cria/seta hidden) ──
+        let editingIdInput = document.getElementById('editing_budget_id');
+        if (!editingIdInput) {
+            editingIdInput = document.createElement('input');
+            editingIdInput.type = 'hidden';
+            editingIdInput.id = 'editing_budget_id';
+            editingIdInput.name = 'editing_budget_id';
+            document.body.appendChild(editingIdInput);
+        }
+        editingIdInput.value = d.id;
+
+        // Banner visual de "editando"
+        showEditingBanner(d.piece_name || 'orçamento', d.id);
+
+        // Dispara recálculo
+        setTimeout(() => {
+            document.querySelectorAll('input').forEach(el => el.dispatchEvent(new Event('input', { bubbles: true })));
+        }, 800);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fill);
+    } else {
+        fill();
+    }
+})();
+
+function showEditingBanner(name, id) {
+    if (document.getElementById('editing-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'editing-banner';
+    banner.className = 'mb-4 px-4 py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 flex items-center justify-between text-sm';
+    banner.innerHTML = `
+        <div class="flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            <span><strong>Editando:</strong> ${name} (ID #${id}) — ao salvar, o orçamento existente será atualizado.</span>
+        </div>
+        <button type="button" onclick="cancelEditing()" class="text-xs font-bold px-2 py-1 rounded hover:bg-amber-500/20">Cancelar edição</button>
+    `;
+    const target = document.querySelector('.card') || document.querySelector('main') || document.body;
+    target.parentNode.insertBefore(banner, target);
+}
+
+function cancelEditing() {
+    document.getElementById('editing_budget_id')?.remove();
+    document.getElementById('editing-banner')?.remove();
+    location.reload();
+}
+// ===== 3D Print Manager - Frontend Logic v7 (dashboard.html) =====
+// Compatível com multi-filamento + insumos persistidos + reload de orçamento
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initMobileMenu();
     initSpoolsData();
-    addFilamentRow();          // primeira linha automática
+    addFilamentRow();
+    initReloadFromURL();
     initCalculator();
     initSupplies();
     initValueMultiplier();
@@ -63,13 +197,130 @@ function initMobileMenu() {
 // ═══════════════════════════════════════════
 let SPOOLS = [];
 
-function initSpoolsData() {
+async function initSpoolsData() {
     try {
         const el = document.getElementById('spools_data');
-        if (el) SPOOLS = JSON.parse(el.textContent) || [];
+        if (el && el.textContent.trim()) {
+            const parsed = JSON.parse(el.textContent);
+            if (Array.isArray(parsed)) SPOOLS = parsed;
+        }
     } catch (e) {
-        console.warn('Erro ao ler spools_data:', e);
+        console.warn('spools_data invalido:', e);
         SPOOLS = [];
+    }
+    try {
+        const res = await fetch('/api/spools');
+        if (res && res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                SPOOLS = data;
+                console.log('[SPOOLS] ' + SPOOLS.length + ' carreteis carregados');
+                refreshAllSpoolSelects();
+            }
+        } else {
+            console.warn('[SPOOLS] /api/spools status:', res && res.status);
+        }
+    } catch (e) {
+        console.warn('Falha ao buscar /api/spools:', e);
+    }
+}
+
+// Repopula TODOS os selects de spool ja renderizados
+function refreshAllSpoolSelects() {
+    document.querySelectorAll('select[id^="fil_spool_"], .spool-select, select[name="spool_id"]').forEach(sel => {
+        populateSpoolSelect(sel);
+    });
+}
+
+// Popula um <select> com a lista de SPOOLS, preservando selecao atual
+function populateSpoolSelect(sel) {
+    if (!sel) return;
+    const current = sel.value;
+    const isCalcSelect = sel.id && sel.id.startsWith('fil_spool_');
+    let html = isCalcSelect
+        ? '<option value="custom">Digitar manualmente</option>'
+        : '<option value="">-- Nenhum --</option>';
+    SPOOLS.forEach(s => {
+        const price = parseFloat(s.price_per_kg || 0).toFixed(2);
+        const label = (s.material || '') + ' ' + (s.color || '') + ' - R$ ' + price + '/kg';
+        html += '<option value="' + s.id + '"'
+              + ' data-price="' + (s.price_per_kg || 0) + '"'
+              + ' data-color="' + (s.color_hex || '#ccc') + '"'
+              + ' data-name="' + (s.material || '') + ' ' + (s.color || '') + '"'
+              + '>' + label + '</option>';
+    });
+    sel.innerHTML = html;
+    if (current && Array.from(sel.options).some(o => o.value === current)) {
+        sel.value = current;
+    }
+}
+
+// Repopula TODOS os selects de spool ja renderizados
+function refreshAllSpoolSelects() {
+    document.querySelectorAll('select[id^="fil_spool_"], .spool-select, select[name="spool_id"]').forEach(sel => {
+        populateSpoolSelect(sel);
+    });
+}
+
+// Popula um <select> com a lista de SPOOLS, preservando selecao atual
+function populateSpoolSelect(sel) {
+    if (!sel) return;
+    const current = sel.value;
+    const isCalcSelect = sel.id && sel.id.startsWith('fil_spool_');
+    let html = isCalcSelect
+        ? '<option value="custom">Digitar manualmente</option>'
+        : '<option value="">-- Nenhum --</option>';
+    SPOOLS.forEach(s => {
+        const price = parseFloat(s.price_per_kg || 0).toFixed(2);
+        const label = (s.material || '') + ' ' + (s.color || '') + ' - R$ ' + price + '/kg';
+        html += '<option value="' + s.id + '"'
+              + ' data-price="' + (s.price_per_kg || 0) + '"'
+              + ' data-color="' + (s.color_hex || '#ccc') + '"'
+              + ' data-name="' + (s.material || '') + ' ' + (s.color || '') + '"'
+              + '>' + label + '</option>';
+    });
+    sel.innerHTML = html;
+    if (current && Array.from(sel.options).some(o => o.value === current)) {
+        sel.value = current;
+    }
+}
+
+// Repopula TODOS os <select> de spool já renderizados na pagina
+function refreshAllSpoolSelects() {
+    // Calculadora multi-filament (ids fil_spool_*)
+    document.querySelectorAll('select[id^="fil_spool_"]').forEach(sel => {
+        populateSpoolSelect(sel);
+    });
+    // Fila de impressao e outros lugares (.spool-select ou name="spool_id")
+    document.querySelectorAll('.spool-select, select[name="spool_id"]').forEach(sel => {
+        populateSpoolSelect(sel);
+    });
+}
+
+// Popula um <select> com a lista de SPOOLS preservando a selecao atual
+function populateSpoolSelect(sel) {
+    if (!sel) return;
+    const current = sel.value;
+    const isCalcSelect = sel.id && sel.id.startsWith('fil_spool_');
+    let html = '';
+    if (isCalcSelect) {
+        html = '<option value="custom">Digitar manualmente</option>';
+    } else {
+        html = '<option value="">-- Nenhum --</option>';
+    }
+    SPOOLS.forEach(s => {
+        const price = parseFloat(s.price_per_kg || 0).toFixed(2);
+        const label = (s.material || '') + ' ' + (s.color || '') + ' - R$ ' + price + '/kg';
+        html += '<option value="' + s.id + '"' +
+                ' data-price="' + (s.price_per_kg || 0) + '"' +
+                ' data-color="' + (s.color_hex || '#ccc') + '"' +
+                ' data-name="' + (s.material || '') + ' ' + (s.color || '') + '"' +
+                '>' + label + '</option>';
+    });
+    sel.innerHTML = html;
+    // tenta restaurar selecao anterior
+    if (current && Array.from(sel.options).some(o => o.value === current)) {
+        sel.value = current;
     }
 }
 
@@ -87,16 +338,14 @@ function addFilamentRow() {
     row.id = 'filament_row_' + idx;
     row.className = 'filament-row p-3 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 shadow-sm';
 
-    // Build spool <option>s
     let spoolOptions = '<option value="custom">✏️ Digitar manualmente</option>';
     SPOOLS.forEach(s => {
         const label = s.material + ' ' + s.color + ' — R$ ' + parseFloat(s.price_per_kg).toFixed(2) + '/kg';
-        spoolOptions += '<option value="' + s.id + '" data-price="' + s.price_per_kg + '">' + label + '</option>';
+        spoolOptions += '<option value="' + s.id + '" data-price="' + s.price_per_kg + '" data-color="' + (s.color_hex || '#ccc') + '" data-name="' + s.material + ' ' + s.color + '">' + label + '</option>';
     });
 
     row.innerHTML =
         '<div class="grid grid-cols-12 gap-2 items-end">' +
-            // Spool select
             '<div class="col-span-12 sm:col-span-5">' +
                 '<label class="block text-[10px] font-bold text-gray-400 mb-1">Filamento</label>' +
                 '<select id="fil_spool_' + idx + '" onchange="onSpoolChange(' + idx + ')" ' +
@@ -106,7 +355,6 @@ function addFilamentRow() {
                     spoolOptions +
                 '</select>' +
             '</div>' +
-            // Price per kg
             '<div class="col-span-5 sm:col-span-3">' +
                 '<label class="block text-[10px] font-bold text-gray-400 mb-1">Preço/KG (R$)</label>' +
                 '<input type="number" step="0.01" min="0" value="' + getDefaultFilamentPrice() + '" ' +
@@ -115,7 +363,6 @@ function addFilamentRow() {
                     'border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 ' +
                     'focus:ring-1 focus:ring-indigo-500 focus:outline-none text-center">' +
             '</div>' +
-            // Weight (g)
             '<div class="col-span-5 sm:col-span-3">' +
                 '<label class="block text-[10px] font-bold text-gray-400 mb-1">Peso (g)</label>' +
                 '<input type="number" step="0.1" min="0" value="0" ' +
@@ -124,7 +371,6 @@ function addFilamentRow() {
                     'border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 ' +
                     'focus:ring-1 focus:ring-indigo-500 focus:outline-none text-center">' +
             '</div>' +
-            // Remove + row cost
             '<div class="col-span-2 sm:col-span-1 flex flex-col items-center justify-end gap-1">' +
                 '<span id="fil_cost_' + idx + '" class="text-[10px] font-bold text-indigo-500">R$ 0.00</span>' +
                 (filamentCounter > 1 ?
@@ -142,7 +388,6 @@ function addFilamentRow() {
 }
 
 function getDefaultFilamentPrice() {
-    // Lê do hidden que veio do settings do Jinja
     const el = document.getElementById('filament_price_kg');
     return el ? parseFloat(el.value) || 0 : 0;
 }
@@ -177,7 +422,6 @@ function recalcFilaments() {
     const rows = container.querySelectorAll('.filament-row');
     let totalCost = 0;
     let totalWeight = 0;
-    // Para o hidden h_filament_price_kg, usamos a média ponderada
     let weightedPriceSum = 0;
 
     rows.forEach(row => {
@@ -194,18 +438,14 @@ function recalcFilaments() {
         if (costEl) costEl.textContent = formatCurrency(cost);
     });
 
-    // Atualiza display
     const display = document.getElementById('filament_cost_display');
     if (display) display.textContent = formatCurrency(totalCost);
 
-    // Atualiza hiddens auxiliares que o calculate() lê
     setHidden('piece_weight_g', totalWeight.toFixed(2));
 
-    // Preço médio ponderado por kg (para o hidden do POST)
     const avgPrice = totalWeight > 0 ? (weightedPriceSum / totalWeight) : getDefaultFilamentPrice();
     setHidden('filament_price_kg', avgPrice.toFixed(2));
 
-    // Hint de peso
     const hint = document.getElementById('weight_hint');
     if (hint) {
         hint.textContent = totalWeight > 0
@@ -214,6 +454,273 @@ function recalcFilaments() {
     }
 
     calculate();
+}
+
+// ═══════════════════════════════════════════
+//  SERIALIZAR FILAMENTOS → JSON
+// ═══════════════════════════════════════════
+function collectFilamentsJSON() {
+    const container = document.getElementById('filaments_container');
+    if (!container) return '[]';
+
+    const rows = container.querySelectorAll('.filament-row');
+    const arr = [];
+
+    rows.forEach(row => {
+        const idx = row.id.replace('filament_row_', '');
+        const select = document.getElementById('fil_spool_' + idx);
+        const price  = parseFloat(document.getElementById('fil_price_' + idx)?.value) || 0;
+        const weight = parseFloat(document.getElementById('fil_weight_' + idx)?.value) || 0;
+
+        if (weight <= 0) return;
+
+        let name = 'Filamento manual';
+        let color = '#cccccc';
+
+        if (select && select.value !== 'custom') {
+            const opt = select.options[select.selectedIndex];
+            name = opt.dataset.name || opt.textContent.trim();
+            color = opt.dataset.color || '#cccccc';
+        }
+
+        arr.push({
+            name: name,
+            color: color,
+            price_kg: price,
+            weight_g: weight,
+        });
+    });
+
+    return JSON.stringify(arr);
+}
+
+// ═══════════════════════════════════════════
+//  SERIALIZAR INSUMOS → JSON
+// ═══════════════════════════════════════════
+function collectSuppliesJSON() {
+    const container = document.getElementById('supplies-container');
+    if (!container) return '[]';
+
+    const rows = container.querySelectorAll('.supply-row');
+    const arr = [];
+
+    rows.forEach(row => {
+        const idx = row.id.replace('supply_row_', '');
+        const nameInput = row.querySelector('input[type="text"]');
+        const price = parseFloat(document.getElementById('sp_price_' + idx)?.value) || 0;
+        const qty   = parseFloat(document.getElementById('sp_qty_' + idx)?.value) || 1;
+        const use   = parseFloat(document.getElementById('sp_use_' + idx)?.value) || 1;
+
+        const unitCost = qty > 0 ? (price / qty) * use : 0;
+
+        arr.push({
+            name: nameInput?.value || 'Insumo',
+            price: price,
+            qty_pack: qty,
+            use: use,
+            unit_cost: Math.round(unitCost * 100) / 100,
+        });
+    });
+
+    return JSON.stringify(arr);
+}
+
+// ═══════════════════════════════════════════
+//  RELOAD FROM URL (Recarregar orçamento)
+// ═══════════════════════════════════════════
+function initReloadFromURL() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Se não tem piece_weight_g, não é um reload de orçamento
+    if (!params.has('piece_weight_g')) return;
+
+    // ── Nome da peça ──
+    const nameInput = document.getElementById('piece_name_input');
+    if (nameInput && params.has('piece_name')) {
+        nameInput.value = params.get('piece_name');
+    }
+
+    // ── Tempos (converter decimal → horas + minutos) ──
+    if (params.has('print_time_h')) {
+        const printH = parseFloat(params.get('print_time_h')) || 0;
+        const ph = Math.floor(printH);
+        const pm = Math.round((printH - ph) * 60);
+        const printHoursEl = document.getElementById('print_hours');
+        const printMinutesEl = document.getElementById('print_minutes');
+        if (printHoursEl) printHoursEl.value = ph;
+        if (printMinutesEl) printMinutesEl.value = pm;
+    }
+
+    if (params.has('manual_time_h')) {
+        const manualH = parseFloat(params.get('manual_time_h')) || 0;
+        const mh = Math.floor(manualH);
+        const mm = Math.round((manualH - mh) * 60);
+        const manualHoursEl = document.getElementById('manual_hours');
+        const manualMinutesEl = document.getElementById('manual_minutes');
+        if (manualHoursEl) manualHoursEl.value = mh;
+        if (manualMinutesEl) manualMinutesEl.value = mm;
+    }
+
+    // ── Campos simples ──
+    const simpleFields = {
+        'depreciation_per_hour': 'depreciation_per_hour',
+        'labor_per_hour': 'labor_per_hour',
+        'risk_rate': 'risk_rate',
+        'margin_percent': 'margin_percent',
+        'lot_quantity': 'lot_quantity',
+    };
+
+    for (const [paramKey, elementId] of Object.entries(simpleFields)) {
+        if (params.has(paramKey)) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.value = params.get(paramKey);
+                const lsKey = 'pm_' + elementId;
+                localStorage.setItem(lsKey, params.get(paramKey));
+            }
+        }
+    }
+
+    // ── Filamentos (recria as linhas a partir do JSON) ──
+    if (params.has('filaments_json')) {
+        try {
+            const filaments = JSON.parse(params.get('filaments_json'));
+            if (Array.isArray(filaments) && filaments.length > 0) {
+                const container = document.getElementById('filaments_container');
+                if (container) container.innerHTML = '';
+                filamentCounter = 0;
+
+                filaments.forEach(fil => {
+                    addFilamentRow();
+                    const idx = filamentCounter - 1;
+
+                    const select = document.getElementById('fil_spool_' + idx);
+                    const priceInput = document.getElementById('fil_price_' + idx);
+                    const weightInput = document.getElementById('fil_weight_' + idx);
+
+                    if (priceInput) priceInput.value = parseFloat(fil.price_kg || 0).toFixed(2);
+                    if (weightInput) weightInput.value = parseFloat(fil.weight_g || 0);
+
+                    if (select) {
+                        let matched = false;
+                        for (let i = 0; i < select.options.length; i++) {
+                            const opt = select.options[i];
+                            if (opt.value !== 'custom' &&
+                                opt.dataset.name === fil.name &&
+                                parseFloat(opt.dataset.price) === parseFloat(fil.price_kg)) {
+                                select.selectedIndex = i;
+                                if (priceInput) {
+                                    priceInput.readOnly = true;
+                                    priceInput.classList.add('opacity-60');
+                                }
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched) {
+                            select.value = 'custom';
+                            if (priceInput) {
+                                priceInput.readOnly = false;
+                                priceInput.classList.remove('opacity-60');
+                            }
+                        }
+                    }
+                });
+
+                recalcFilaments();
+            }
+        } catch (e) {
+            console.warn('Erro ao parsear filaments_json da URL:', e);
+        }
+    }
+
+    // ── Insumos (recria as linhas a partir do JSON) ──
+    if (params.has('supplies_json')) {
+        try {
+            const supplies = JSON.parse(params.get('supplies_json'));
+            if (Array.isArray(supplies) && supplies.length > 0) {
+                supplies.forEach(sup => {
+                    addSupplyRow();
+                    const idx = supplyCounter - 1;
+
+                    const row = document.getElementById('supply_row_' + idx);
+                    const nameInput = row?.querySelector('input[type="text"]');
+                    const priceInput = document.getElementById('sp_price_' + idx);
+                    const qtyInput = document.getElementById('sp_qty_' + idx);
+                    const useInput = document.getElementById('sp_use_' + idx);
+
+                    if (nameInput) nameInput.value = sup.name || 'Insumo';
+                    if (priceInput) priceInput.value = parseFloat(sup.price || 0).toFixed(2);
+                    if (qtyInput) qtyInput.value = parseInt(sup.qty_pack || 1);
+                    if (useInput) useInput.value = parseInt(sup.use || 1);
+                });
+
+                recalculateSupplies();
+            }
+        } catch (e) {
+            console.warn('Erro ao parsear supplies_json da URL:', e);
+        }
+    }
+
+    // ── Multiplicador de valor ──
+    if (params.has('value_multiplier')) {
+        const mult = parseFloat(params.get('value_multiplier')) || 1;
+        if (mult > 1) {
+            const toggle = document.getElementById('value-toggle');
+            const panel = document.getElementById('value-multiplier-panel');
+            const input = document.getElementById('value_multiplier_input');
+            const hidden = document.getElementById('value_multiplier');
+
+            if (toggle) {
+                toggle.setAttribute('aria-pressed', 'true');
+                toggle.classList.add('active');
+                toggle.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+            }
+            if (panel) panel.style.display = '';
+            if (input) input.value = mult;
+            if (hidden) hidden.value = mult;
+        }
+    }
+
+    // ── Recalcula tudo ──
+    calculate();
+
+    // ── Limpa a URL para não recarregar ao dar F5 ──
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // ── Toast de feedback ──
+    setTimeout(() => {
+        const name = params.get('piece_name') || 'Orçamento';
+        showToast('📋 "' + name + '" carregado na calculadora!');
+    }, 300);
+
+    // ─── EDIÇÃO: marca orçamento sendo editado ───
+    if (params.has('editing_budget_id')) {
+        const budgetId = params.get('editing_budget_id');
+        const form = document.getElementById('calc-form');
+        if (form) {
+            let hidden = form.querySelector('input[name="editing_budget_id"]');
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'editing_budget_id';
+                form.appendChild(hidden);
+            }
+            hidden.value = budgetId;
+
+            if (!document.getElementById('editing-banner')) {
+                const banner = document.createElement('div');
+                banner.id = 'editing-banner';
+                banner.className = 'mb-4 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-sm flex items-center gap-2';
+                banner.innerHTML = '<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>' +
+                    '<span><strong>Editando orçamento #' + budgetId + '</strong> — ao salvar, o registro existente será atualizado.</span>';
+                form.parentNode.insertBefore(banner, form);
+            }
+            console.log('[reload] modo EDIÇÃO ativo para budget ID', budgetId);
+        } else {
+            console.warn('[reload] form #calc-form não encontrado');
+        }
+    }
 }
 
 // ═══════════════════════════════════════════
@@ -245,8 +752,6 @@ function initLocalStoragePersistence() {
 // ═══════════════════════════════════════════
 let _lastUnitCost = 0;
 
-// Lê constantes de energia do HTML (embutidas pelo Jinja nos badges da seção Parâmetros)
-// Fallback para valores padrão caso não consiga extrair
 const ENERGY_TARIFF       = parseFloat(document.querySelector('[class*="bg-yellow-400"]')?.parentElement?.textContent?.match(/[\d.]+/)?.[0]) || 0.85;
 const PRINTER_CONSUMPTION = parseFloat(document.querySelector('[class*="bg-blue-400"]')?.parentElement?.textContent?.match(/[\d.]+/)?.[0]) || 0.12;
 
@@ -286,7 +791,6 @@ function formatCurrency(v) {
 }
 
 function calculate() {
-    // === Inputs ===
     const filamentPriceKg = getVal('filament_price_kg');
     const pieceWeightG    = getVal('piece_weight_g');
     const printTimeH      = getTimeInHours('print_hours', 'print_minutes');
@@ -299,7 +803,6 @@ function calculate() {
     const suppliesCost    = getVal('supplies_cost');
     const valueMultiplier = parseFloat(document.getElementById('value_multiplier')?.value) || 1;
 
-    // === Cost breakdown (TOTAL for the entire print job / lot) ===
     const filamentCost     = (pieceWeightG / 1000) * filamentPriceKg;
     const energyCost       = printTimeH * PRINTER_CONSUMPTION * ENERGY_TARIFF;
     const depreciationCost = printTimeH * depreciationH;
@@ -308,7 +811,6 @@ function calculate() {
     const riskCost         = subtotal * (riskRate / 100);
     const totalCost        = subtotal + riskCost;
 
-    // === Per-unit costs ===
     const unitCost  = totalCost / lotQty;
     const unitPrice = unitCost * (1 + marginPercent / 100) * valueMultiplier;
 
@@ -317,7 +819,6 @@ function calculate() {
     const finalPrice    = unitPrice;
     const lotTotalPrice = unitPrice * lotQty;
 
-    // === Update Breakdown (IDs do dashboard.html: res_*) ===
     setText('res_filament',            formatCurrency(filamentCost));
     setText('res_energy',              formatCurrency(energyCost));
     setText('res_depreciation',        formatCurrency(depreciationCost));
@@ -327,7 +828,6 @@ function calculate() {
     setText('res_risk',                formatCurrency(riskCost));
     setText('res_total',               formatCurrency(totalCost));
 
-    // Unit cost hint next to total
     const resTotalUnit = document.getElementById('res_total_unit');
     if (resTotalUnit) {
         if (lotQty > 1) {
@@ -338,7 +838,6 @@ function calculate() {
         }
     }
 
-    // Unit cost row
     const unitCostRow = document.getElementById('unit_cost_row');
     if (unitCostRow) {
         if (lotQty > 1) {
@@ -349,10 +848,8 @@ function calculate() {
         }
     }
 
-    // === Final Price Card ===
     setText('res_final_price', formatCurrency(finalPrice));
 
-    // Lot subtitle
     const lotSub = document.getElementById('lot_price_subtitle');
     if (lotSub) {
         if (lotQty > 1) {
@@ -363,13 +860,11 @@ function calculate() {
         }
     }
 
-    // Batch label
     const batchLabel = document.getElementById('batch_label');
     if (batchLabel) {
         batchLabel.textContent = lotQty > 1 ? '— Preço por Peça (lote de ' + lotQty + ')' : '';
     }
 
-    // Lot hint
     const lotHint = document.getElementById('lot_hint');
     if (lotHint) {
         lotHint.textContent = lotQty > 1
@@ -377,7 +872,6 @@ function calculate() {
             : 'Quantas peças saem dessa impressão';
     }
 
-    // === Labels ===
     const riskLabel = document.getElementById('risk_label');
     if (riskLabel) riskLabel.textContent = '(' + riskRate + '%)';
 
@@ -392,13 +886,11 @@ function calculate() {
     setTimeLabel('print_time_label', printTimeH);
     setTimeLabel('manual_time_label', manualTimeH);
 
-    // === Reference prices ===
-    const costRef = unitCost; // base = custo unitário
-    setText('res_price100', formatCurrency(costRef * 2));       // 100% margin
-    setText('res_price200', formatCurrency(costRef * 3));       // 200% margin
-    setText('res_price400', formatCurrency(costRef * 5));       // 400% margin
+    const costRef = unitCost;
+    setText('res_price100', formatCurrency(costRef * 2));
+    setText('res_price200', formatCurrency(costRef * 3));
+    setText('res_price400', formatCurrency(costRef * 5));
 
-    // === Hidden fields for form submission ===
     setHidden('h_filament_price_kg',     filamentPriceKg);
     setHidden('h_piece_weight_g',        pieceWeightG);
     setHidden('h_print_time_h',          printTimeH.toFixed(4));
@@ -414,10 +906,7 @@ function calculate() {
     setHidden('lot_quantity_hidden',     lotQty);
     setHidden('calc_total_cost',         totalCost.toFixed(2));
 
-    // === Volume discount table ===
     updateVolumeTable(finalPrice);
-
-    // === Simulator ===
     updateSimulator();
 }
 
@@ -461,7 +950,7 @@ function addSupplyRow() {
         '<div class="col-span-4">' +
             '<label class="block text-[10px] font-bold text-gray-400 mb-1">Insumo</label>' +
             '<input type="text" placeholder="Ex: Parafuso M3" ' +
-                   'class="w-full rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-gray-900 ' +
+                   'class="supply-name w-full rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-gray-900 ' +
                    'border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 ' +
                    'focus:ring-1 focus:ring-blue-500 focus:outline-none">' +
         '</div>' +
@@ -555,12 +1044,8 @@ function recalculateSupplies() {
         if (costEl) costEl.textContent = formatCurrency(rowCost);
     });
 
-    // Atualiza o hidden auxiliar "supplies_cost" (linha 75 do HTML)
     setHidden('supplies_cost', total.toFixed(4));
-
-    // Total display
     setText('supplies-total-value', formatCurrency(total));
-
     calculate();
 }
 
@@ -575,12 +1060,10 @@ function initValueMultiplier() {
 
     if (!toggle || !panel) return;
 
-    // Cria o dot (bolinha) dentro do toggle se não existir
     if (!toggle.querySelector('.toggle-dot')) {
         toggle.innerHTML = '<span class="toggle-dot"></span>';
     }
 
-    // Estado inicial
     toggle.setAttribute('aria-pressed', 'false');
     toggle.classList.add('bg-gray-200', 'dark:bg-gray-700');
 
@@ -588,8 +1071,6 @@ function initValueMultiplier() {
         const isActive = toggle.getAttribute('aria-pressed') === 'true';
         const newState = !isActive;
         toggle.setAttribute('aria-pressed', String(newState));
-
-        const dot = toggle.querySelector('.toggle-dot');
 
         if (newState) {
             toggle.classList.add('active');
@@ -644,21 +1125,18 @@ function updateSimulator() {
     setText('sim_your_profit', formatCurrency(yourProfit));
     setText('sim_reseller_profit', formatCurrency(resellerProfit));
 
-    // Bars
     const yourPct     = retailPrice > 0 ? Math.max(0, Math.min(100, (yourProfit / retailPrice) * 100)) : 0;
     const resellerPct = retailPrice > 0 ? Math.max(0, Math.min(100, (resellerProfit / retailPrice) * 100)) : 0;
 
     setBarWidth('sim_your_bar', yourPct, yourProfit > 0 ? formatCurrency(yourProfit) : 'R$ 0.00');
     setBarWidth('sim_reseller_bar', resellerPct, resellerProfit > 0 ? formatCurrency(resellerProfit) : 'R$ 0.00');
 
-    // Color
     const yourEl = document.getElementById('sim_your_profit');
     if (yourEl) {
         yourEl.classList.remove('text-emerald-500', 'text-red-500');
         yourEl.classList.add(yourProfit < 0 ? 'text-red-500' : 'text-emerald-500');
     }
 
-    // Alert
     const alert = document.getElementById('sim_alert');
     if (alert) {
         alert.style.display = (wholesalePrice < _lastUnitCost && _lastUnitCost > 0) ? 'flex' : 'none';
@@ -673,21 +1151,74 @@ function setBarWidth(id, pct, label) {
 }
 
 // ═══════════════════════════════════════════
-//  FORM SUBMIT — preencher hidden + nome
+//  FORM SUBMIT — SERIALIZA TUDO
 // ═══════════════════════════════════════════
 function initFormSubmit() {
-    const form = document.getElementById('calc-form');
-    if (!form) return;
-    form.addEventListener('submit', () => {
-        const nameInput = document.getElementById('piece_name_input');
-        const nameHidden = document.getElementById('h_piece_name');
-        if (nameInput && nameHidden) {
-            nameHidden.value = nameInput.value || 'Sem nome';
-        }
-        // Garante que todos os hiddens estejam atualizados
-        calculate();
-    });
+    const calcForm = document.getElementById('calc-form');
+    if (calcForm) {
+                // === SYNC NOME/PESO ANTES DO SUBMIT (Bug 1 fix) ===
+        calcForm.addEventListener('submit', (e) => {
+            const nameInput  = document.getElementById('piece_name_input');
+            const nameHidden = document.getElementById('h_piece_name');
+            if (nameInput && nameHidden) {
+                const v = (nameInput.value || '').trim();
+                nameHidden.value = v || 'Sem nome';
+            }
+            const weightInput  = document.getElementById('piece_weight_g');
+            const weightHidden = document.getElementById('h_piece_weight_g');
+            if (weightInput && weightHidden) {
+                weightHidden.value = weightInput.value || '0';
+            }
+        }, true); // capture: roda ANTES do handler async abaixo
+        // === FIM SYNC ===
+        calcForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            // === BUG 1 FIX: sync nome do input visível para o hidden ===
+            const nameInput  = document.getElementById('piece_name_input');
+            const nameHidden = document.getElementById('h_piece_name');
+            if (nameInput && nameHidden) {
+                const v = (nameInput.value || '').trim();
+                nameHidden.value = v || 'Sem nome';
+            }
+            // === FIM BUG 1 FIX ===
+            const submitBtn = calcForm.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                const res = await fetch('/calculator', { method: 'POST', body: new FormData(calcForm) });
+                if (res.ok || res.redirected) {
+                    window.location.href = '/?saved=1';
+                    return;
+                } else {
+                    showToast('Erro ao salvar (' + res.status + ')');
+                }
+            } catch (err) {
+                console.error('Erro:', err);
+                showToast('Erro de rede');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+    }
+    const machineForm = document.querySelector('form[action="/settings/machine"]');
+    if (machineForm) {
+        machineForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch('/settings/machine', { method: 'POST', body: new FormData(machineForm) });
+                if (res.ok || res.redirected) {
+                    showToast('Custo da maquina atualizado!');
+                    return;
+                } else {
+                    showToast('Erro ao atualizar');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de rede');
+            }
+        });
+    }
 }
+
 
 // ═══════════════════════════════════════════
 //  HELPERS
@@ -720,6 +1251,7 @@ function initToasts() {
     const params = new URLSearchParams(window.location.search);
     let msg = null;
     if (params.has('saved'))          msg = '✅ Orçamento salvo com sucesso!';
+        if (params.has('updated'))        msg = '✏️ Orçamento atualizado com sucesso!';
     if (params.has('deleted'))        msg = '🗑️ Item removido!';
     if (params.has('cleared'))        msg = '🧹 Histórico limpo!';
     if (params.has('added'))          msg = '✅ Item adicionado!';
@@ -758,4 +1290,3 @@ function confirmDelete(msg) {
 function confirmClear() {
     return confirm('⚠️ Isso removerá TODOS os orçamentos do histórico. Continuar?');
 }
-

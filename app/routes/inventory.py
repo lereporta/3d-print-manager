@@ -1,33 +1,37 @@
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Spool
-from datetime import datetime, timezone
-from typing import Optional
 
-router = APIRouter(prefix="/inventory")
+from app.database import get_db
+from app.models import Spool, User
+from app.auth import get_current_user, log_action
+
+router = APIRouter(prefix="/inventory", tags=["inventory"])
 templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/")
-async def inventory(request: Request, db: Session = Depends(get_db)):
-    spools = db.query(Spool).order_by(Spool.created_at.desc()).all()
+async def inventory_page(request: Request):
+    # Página HTML — os dados vêm via /inventory/api/list (AJAX + JWT)
     return templates.TemplateResponse(
         "inventory.html",
-        {
-            "request": request,
-            "spools": spools,
-        },
+        {"request": request, "active_page": "inventory", "spools": []},
     )
 
 
-# === API endpoint for dashboard to fetch spools as JSON ===
-@router.get("/api/spools")
-async def api_spools(db: Session = Depends(get_db)):
-    spools = db.query(Spool).order_by(Spool.name.asc()).all()
-    return [
+@router.get("/api/list")
+async def api_list_spools(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    spools = (
+        db.query(Spool)
+        .filter(Spool.user_id == current_user.id)
+        .order_by(Spool.created_at.desc())
+        .all()
+    )
+    return JSONResponse(content=[
         {
             "id": s.id,
             "name": s.name,
@@ -35,12 +39,15 @@ async def api_spools(db: Session = Depends(get_db)):
             "color_hex": s.color_hex,
             "material": s.material,
             "price_per_kg": s.price_per_kg,
-            "current_weight_g": s.current_weight_g,
             "initial_weight_g": s.initial_weight_g,
+            "current_weight_g": round(s.current_weight_g, 1),
+            "usage_percent": s.usage_percent,
             "remaining_percent": s.remaining_percent,
+            "is_low": s.is_low,
+            "is_empty": s.is_empty,
         }
         for s in spools
-    ]
+    ])
 
 
 @router.post("/add")
@@ -52,8 +59,10 @@ async def add_spool(
     price_per_kg: float = Form(0.0),
     initial_weight_g: float = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     spool = Spool(
+        user_id=current_user.id,
         name=name.strip(),
         color=color.strip(),
         color_hex=color_hex,
@@ -64,30 +73,59 @@ async def add_spool(
     )
     db.add(spool)
     db.commit()
-    return RedirectResponse(url="/inventory/?added=1", status_code=303)
+    db.refresh(spool)
+    log_action(db, current_user.id, "add_spool")
+    return JSONResponse(content={"ok": True, "id": spool.id}, status_code=201)
 
 
 @router.post("/edit/{spool_id}")
-async def edit_spool(
+@router.post("/update/{spool_id}")
+async def update_spool(
     spool_id: int,
     current_weight_g: float = Form(...),
-    price_per_kg: Optional[float] = Form(None),
+    price_per_kg: float = Form(None),
+    name: str = Form(None),
+    color: str = Form(None),
+    color_hex: str = Form(None),
+    material: str = Form(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    spool = db.query(Spool).filter(Spool.id == spool_id).first()
-    if spool:
-        spool.current_weight_g = max(0, current_weight_g)
-        if price_per_kg is not None:
-            spool.price_per_kg = max(0, price_per_kg)
-        spool.updated_at = datetime.now(timezone.utc)
-        db.commit()
-    return RedirectResponse(url="/inventory/", status_code=303)
+    spool = (
+        db.query(Spool)
+        .filter(Spool.id == spool_id, Spool.user_id == current_user.id)
+        .first()
+    )
+    if not spool:
+        raise HTTPException(status_code=404, detail="Carretel não encontrado")
+
+    if name is not None:        spool.name = name.strip()
+    if color is not None:       spool.color = color.strip()
+    if color_hex is not None:   spool.color_hex = color_hex
+    if material is not None:    spool.material = material.strip()
+    if price_per_kg is not None: spool.price_per_kg = price_per_kg
+    spool.current_weight_g = max(0, min(current_weight_g, spool.initial_weight_g))
+
+    db.commit()
+    log_action(db, current_user.id, "update_spool")
+    return JSONResponse(content={"ok": True})
 
 
 @router.post("/delete/{spool_id}")
-async def delete_spool(spool_id: int, db: Session = Depends(get_db)):
-    spool = db.query(Spool).filter(Spool.id == spool_id).first()
-    if spool:
-        db.delete(spool)
-        db.commit()
-    return RedirectResponse(url="/inventory/?deleted=1", status_code=303)
+async def delete_spool(
+    spool_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    spool = (
+        db.query(Spool)
+        .filter(Spool.id == spool_id, Spool.user_id == current_user.id)
+        .first()
+    )
+    if not spool:
+        raise HTTPException(status_code=404, detail="Carretel não encontrado")
+    db.delete(spool)
+    db.commit()
+    log_action(db, current_user.id, "delete_spool")
+    return JSONResponse(content={"ok": True})
+

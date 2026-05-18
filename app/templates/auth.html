@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso — 3D Print Manager</title>
+    <script>
+      (function(){var t=localStorage.getItem('theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');})();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      body { font-family: 'Inter', sans-serif; }
+      .tab-active { background: linear-gradient(135deg, #6366f1, #06b6d4); color: white; }
+      .panel { display: none; }
+      .panel.active { display: block; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-100 to-indigo-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 border border-gray-100 dark:border-slate-700">
+
+    <!-- Logo -->
+    <div class="text-center mb-6">
+      <div class="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-400 items-center justify-center shadow-lg mb-3">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-extrabold text-gray-800 dark:text-white">3D Print Manager</h1>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Plataforma de gerenciamento — Beta fechado</p>
+    </div>
+
+    <!-- Tabs -->
+    <div id="tabs" class="flex gap-1 p-1 bg-gray-100 dark:bg-slate-900 rounded-xl mb-6 text-sm font-semibold">
+      <button data-tab="login" class="tab flex-1 py-2 rounded-lg transition tab-active">Login</button>
+      <button data-tab="register" class="tab flex-1 py-2 rounded-lg transition text-gray-600 dark:text-gray-300">Cadastro</button>
+      <button data-tab="forgot" class="tab flex-1 py-2 rounded-lg transition text-gray-600 dark:text-gray-300">Esqueci</button>
+    </div>
+
+    <!-- Mensagens -->
+    <div id="msg" class="hidden mb-4 px-4 py-2 rounded-lg text-sm font-medium"></div>
+
+    <!-- LOGIN -->
+    <form id="form-login" class="panel active space-y-4" autocomplete="on">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">E-mail</label>
+        <input type="email" name="email" required class="input">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Senha</label>
+        <input type="password" name="password" required class="input">
+      </div>
+      <button class="btn-primary">Entrar</button>
+    </form>
+
+    <!-- REGISTER -->
+    <form id="form-register" class="panel space-y-4" autocomplete="on">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nome</label>
+        <input type="text" name="name" required minlength="2" class="input">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">E-mail</label>
+        <input type="email" name="email" required class="input">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Senha (mín. 6 caracteres)</label>
+        <input type="password" name="password" required minlength="6" class="input">
+      </div>
+      <button class="btn-primary">Criar conta</button>
+    </form>
+
+    <!-- FORGOT -->
+    <form id="form-forgot" class="panel space-y-4">
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        Informe seu e-mail. <strong>Não enviamos mensagens automáticas</strong> —
+        o administrador receberá sua solicitação e entrará em contato.
+      </p>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">E-mail</label>
+        <input type="email" name="email" required class="input">
+      </div>
+      <button class="btn-primary">Solicitar recuperação</button>
+    </form>
+
+    <!-- RESET (aparece quando há ?token=... na URL) -->
+    <form id="form-reset" class="panel space-y-4">
+      <p class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+        🔑 Definir nova senha
+      </p>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nova senha (mín. 6 caracteres)</label>
+        <input type="password" name="new_password" required minlength="6" class="input">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Confirme a senha</label>
+        <input type="password" name="confirm" required minlength="6" class="input">
+      </div>
+      <button class="btn-primary">Atualizar senha</button>
+    </form>
+
+  </div>
+
+  <style>
+    .input { width: 100%; padding: .65rem .85rem; border-radius: .75rem;
+             border: 1px solid #e5e7eb; background: white; font-size: .9rem; outline: none; transition: all .15s; }
+    .input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+    .dark .input { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+    .btn-primary { width: 100%; padding: .75rem; border-radius: .75rem; font-weight: 700;
+                   background: linear-gradient(135deg, #6366f1, #06b6d4); color: white;
+                   transition: transform .1s, box-shadow .15s; }
+    .btn-primary:hover { box-shadow: 0 6px 18px rgba(99,102,241,.35); }
+    .btn-primary:active { transform: scale(.98); }
+  </style>
+
+  <script src="/static/js/auth.js"></script>
+</body>
+</html>
+

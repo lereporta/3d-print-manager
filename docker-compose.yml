@@ -2,11 +2,20 @@ services:
   app:
     build: .
     container_name: 3d-print-manager
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Sobrescreve DATABASE_URL para apontar pro volume persistente
+      DATABASE_URL: sqlite:////app/data/print_manager.db
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
-    environment:
-      - TZ=America/Cuiaba
-    restart: unless-stopped
+      - ./data:/app/data           # ← persiste o SQLite entre restarts
+      - ./app:/app/app             # opcional: hot reload em dev
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 

@@ -1,120 +1,138 @@
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app.models import PrintJob, Spool, JobStatus, JobPriority
-from datetime import datetime, timezone
+from app.models import PrintJob, JobStatus, JobPriority, Spool, User
+from app.auth import get_current_user, log_action
 
-router = APIRouter(prefix="/queue")
+router = APIRouter(prefix="/queue", tags=["queue"])
 templates = Jinja2Templates(directory="app/templates")
-
-PRIORITY_ORDER = {
-    JobPriority.URGENTE.value: 0,
-    JobPriority.ALTA.value: 1,
-    JobPriority.MEDIA.value: 2,
-    JobPriority.BAIXA.value: 3,
-}
 
 
 @router.get("/")
-async def queue(request: Request, db: Session = Depends(get_db)):
-    jobs = db.query(PrintJob).all()
-    spools = db.query(Spool).filter(Spool.current_weight_g > 0).all()
-
-    jobs.sort(
-        key=lambda j: (
-            0
-            if j.status == JobStatus.IMPRIMINDO.value
-            else (1 if j.status == JobStatus.PENDENTE.value else 2),
-            PRIORITY_ORDER.get(j.priority, 99),
-        )
-    )
-
-    # Build spool map for display
-    spool_map = {s.id: s for s in db.query(Spool).all()}
-
+async def queue_page(request: Request):
     return templates.TemplateResponse(
         "queue.html",
-        {
-            "request": request,
-            "jobs": jobs,
-            "spools": spools,
-            "spool_map": spool_map,
-            "statuses": [s.value for s in JobStatus],
-            "priorities": [p.value for p in JobPriority],
-        },
+        {"request": request, "active_page": "queue"},
     )
+
+
+@router.get("/api/list")
+async def api_list_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    jobs = (
+        db.query(PrintJob)
+        .filter(PrintJob.user_id == current_user.id)
+        .order_by(PrintJob.created_at.desc())
+        .all()
+    )
+    return JSONResponse(content=[
+        {
+            "id": j.id,
+            "job_name": j.job_name,
+            "piece_weight_g": j.piece_weight_g,
+            "spool_id": j.spool_id,
+            "status": j.status,
+            "priority": j.priority,
+            "notes": j.notes,
+            "created_at": j.created_at.strftime("%d/%m/%Y %H:%M") if j.created_at else "",
+        }
+        for j in jobs
+    ])
 
 
 @router.post("/add")
 async def add_job(
     job_name: str = Form(...),
     piece_weight_g: float = Form(0.0),
-    spool_id: int = Form(0),
+    spool_id: int = Form(None),
     priority: str = Form(JobPriority.MEDIA.value),
     notes: str = Form(""),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Valida que o spool (se informado) pertence ao usuário
+    if spool_id:
+        spool = (
+            db.query(Spool)
+            .filter(Spool.id == spool_id, Spool.user_id == current_user.id)
+            .first()
+        )
+        if not spool:
+            raise HTTPException(status_code=400, detail="Carretel inválido ou não pertence a você")
+
     job = PrintJob(
-        job_name=job_name,
+        user_id=current_user.id,
+        job_name=job_name.strip(),
         piece_weight_g=piece_weight_g,
-        spool_id=spool_id if spool_id > 0 else None,
+        spool_id=spool_id,
+        status=JobStatus.PENDENTE.value,
         priority=priority,
-        notes=notes,
+        notes=notes.strip(),
     )
     db.add(job)
     db.commit()
+    log_action(db, current_user.id, "add_print_job")
     return RedirectResponse(url="/queue/?added=1", status_code=303)
 
 
 @router.post("/update/{job_id}")
-async def update_job_status(
+async def update_job(
     job_id: int,
     status: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
+    job = (
+        db.query(PrintJob)
+        .filter(PrintJob.id == job_id, PrintJob.user_id == current_user.id)
+        .first()
+    )
     if not job:
-        return RedirectResponse(url="/queue/", status_code=303)
+        raise HTTPException(status_code=404, detail="Job não encontrado")
 
-    old_status = job.status
+    previous_status = job.status
     job.status = status
-    job.updated_at = datetime.now(timezone.utc)
 
-    # Debitar estoque ao finalizar
+    # Se finalizou agora, desconta o filamento do carretel
     if (
         status == JobStatus.FINALIZADO.value
-        and old_status != JobStatus.FINALIZADO.value
+        and previous_status != JobStatus.FINALIZADO.value
         and job.spool_id
         and job.piece_weight_g > 0
     ):
-        spool = db.query(Spool).filter(Spool.id == job.spool_id).first()
+        spool = (
+            db.query(Spool)
+            .filter(Spool.id == job.spool_id, Spool.user_id == current_user.id)
+            .first()
+        )
         if spool:
             spool.current_weight_g = max(0, spool.current_weight_g - job.piece_weight_g)
-            spool.updated_at = datetime.now(timezone.utc)
-
-    # Reverter débito se voltou de Finalizado para outro status
-    if (
-        old_status == JobStatus.FINALIZADO.value
-        and status != JobStatus.FINALIZADO.value
-        and job.spool_id
-        and job.piece_weight_g > 0
-    ):
-        spool = db.query(Spool).filter(Spool.id == job.spool_id).first()
-        if spool:
-            spool.current_weight_g = spool.current_weight_g + job.piece_weight_g
-            spool.updated_at = datetime.now(timezone.utc)
 
     db.commit()
-    return RedirectResponse(url="/queue/", status_code=303)
+    log_action(db, current_user.id, f"job_status_{status.lower()}")
+    return RedirectResponse(url="/queue/?updated=1", status_code=303)
 
 
 @router.post("/delete/{job_id}")
-async def delete_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-    if job:
-        db.delete(job)
-        db.commit()
+async def delete_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = (
+        db.query(PrintJob)
+        .filter(PrintJob.id == job_id, PrintJob.user_id == current_user.id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    db.delete(job)
+    db.commit()
+    log_action(db, current_user.id, "delete_print_job")
     return RedirectResponse(url="/queue/?deleted=1", status_code=303)
 

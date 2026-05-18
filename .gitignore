@@ -1,0 +1,14 @@
+# Banco de dados local
+data/print_manager.db
+
+# Arquivos de ambiente/configurações sensíveis
+.env
+.env.local
+
+# Arquivos temporários e backups
+*.bak
+*.bak.*
+*.bkp*
+*_backups/
+__pycache__/
+*.pyc
