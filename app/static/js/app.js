@@ -1169,6 +1169,22 @@ function initFormSubmit() {
             if (weightInput && weightHidden) {
                 weightHidden.value = weightInput.value || '0';
             }
+            // === SYNC JSON FILAMENTOS/INSUMOS (fix backend recebendo '[]') ===
+            try {
+                const fHidden = document.getElementById('h_filaments_json');
+                const sHidden = document.getElementById('h_supplies_json');
+                if (fHidden && typeof collectFilamentsJSON === 'function') {
+                    fHidden.value = collectFilamentsJSON();
+                }
+                if (sHidden && typeof collectSuppliesJSON === 'function') {
+                    sHidden.value = collectSuppliesJSON();
+                }
+                console.log('[submit] filaments_json =', fHidden && fHidden.value);
+                console.log('[submit] supplies_json  =', sHidden && sHidden.value);
+            } catch (err) {
+                console.warn('[submit] erro ao serializar JSON:', err);
+            }
+            // === FIM SYNC JSON ===
         }, true); // capture: roda ANTES do handler async abaixo
         // === FIM SYNC ===
         calcForm.addEventListener('submit', async (e) => {
