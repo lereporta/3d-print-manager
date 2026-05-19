@@ -149,6 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initToasts();
     initButtonFeedback();
 
+    loadDashboardData();
+
     requestAnimationFrame(() => {
         document.body.classList.remove('no-transitions');
     });
@@ -209,7 +211,7 @@ async function initSpoolsData() {
         SPOOLS = [];
     }
     try {
-        const res = await fetch('/api/spools');
+        const res = await fetch('/api/spools', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } });
         if (res && res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
@@ -1200,7 +1202,7 @@ function initFormSubmit() {
             const submitBtn = calcForm.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
             try {
-                const res = await fetch('/calculator', { method: 'POST', body: new FormData(calcForm) });
+                const res = await fetch('/calculator', { method: 'POST', headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }, body: new FormData(calcForm) });
                 if (res.ok || res.redirected) {
                     window.location.href = '/?saved=1';
                     return;
@@ -1215,21 +1217,6 @@ function initFormSubmit() {
             }
         });
     }
-    const machineForm = document.querySelector('form[action="/settings/machine"]');
-    if (machineForm) {
-        machineForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            try {
-                const res = await fetch('/settings/machine', { method: 'POST', body: new FormData(machineForm) });
-                if (res.ok || res.redirected) {
-                    showToast('Custo da maquina atualizado!');
-                    return;
-                } else {
-                    showToast('Erro ao atualizar');
-                }
-            } catch (err) {
-                console.error(err);
-                showToast('Erro de rede');
             }
         });
     }
@@ -1306,3 +1293,78 @@ function confirmDelete(msg) {
 function confirmClear() {
     return confirm('⚠️ Isso removerá TODOS os orçamentos do histórico. Continuar?');
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  DASHBOARD DATA — carrega via /api/dashboard
+// ═══════════════════════════════════════════════════════════════
+async function loadDashboardData() {
+    try {
+        const res = await fetch('/api/dashboard', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } });
+        if (!res.ok) { console.warn('[dashboard] status:', res.status); return; }
+        const data = await res.json();
+        console.log('[dashboard] dados carregados:', data);
+        applyDashboardData(data);
+    } catch (err) {
+        console.warn('[dashboard] falha ao carregar:', err);
+    }
+}
+
+function applyDashboardData(data) {
+    const { roi } = data;
+    if (!roi) return;
+
+    const machineCost       = roi.machine_cost ?? 0;
+    const depreciationTotal = roi.depreciation_total ?? 0;
+    const roiPercent        = roi.roi_percent ?? 0;
+    const roiPct            = Math.min(roiPercent, 100);
+
+    // Input do formulário
+    const inputMC = document.getElementById('input_machine_cost');
+    if (inputMC) inputMC.value = machineCost;
+
+    // Depreciação acumulada
+    const elDep = document.getElementById('roi_depreciation_total');
+    if (elDep) elDep.textContent = 'R$ ' + depreciationTotal.toFixed(2);
+
+    // Barra de progresso
+    const bar = document.getElementById('roi_bar');
+    if (bar) {
+        bar.style.width = roiPct + '%';
+        bar.classList.toggle('bg-emerald-500', roiPercent >= 100);
+        bar.classList.toggle('bg-indigo-500',  roiPercent < 100);
+    }
+
+    // Textos de %  e meta
+    const elPct  = document.getElementById('roi_percent_text');
+    if (elPct)  elPct.textContent  = roiPercent.toFixed(1) + '% amortizado';
+
+    const elMeta = document.getElementById('roi_machine_cost_text');
+    if (elMeta) elMeta.textContent = 'Meta: R$ ' + machineCost.toFixed(2);
+
+    console.log('[ROI] atualizado → cost:', machineCost, '| deprec:', depreciationTotal, '| %:', roiPercent);
+}
+
+// ── machine_cost form ──────────────────────────────────────────
+(function () {
+    const machineForm = document.querySelector('form[action="/settings/machine"]');
+    if (!machineForm) return;
+    machineForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch('/settings/machine', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+                body: new FormData(machineForm),
+            });
+            if (res.ok || res.redirected) {
+                showToast('⚙️ Custo da máquina atualizado!');
+                await loadDashboardData();
+            } else {
+                showToast('❌ Erro ao atualizar (' + res.status + ')');
+            }
+        } catch (err) {
+            console.error('[machineForm]', err);
+            showToast('❌ Erro de rede');
+        }
+    });
+})();

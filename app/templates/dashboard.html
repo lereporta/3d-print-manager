@@ -530,7 +530,7 @@
                     <div class="input-group flex-1">
                         <span class="input-prefix">R$</span>
                         <input type="number" step="0.01" min="0"
-                               name="machine_cost" value="{{ roi.machine_cost }}"
+                               name="machine_cost" id="input_machine_cost" value="{{ roi.machine_cost }}"
                                class="input-field has-prefix" placeholder="2500.00">
                     </div>
                     <button type="submit" class="btn btn-ghost text-xs px-3" title="Salvar custo">
@@ -542,16 +542,16 @@
             <div class="space-y-3">
                 <div class="flex justify-between text-sm">
                     <span class="text-gray-500">Depreciação Acumulada</span>
-                    <span class="font-bold text-emerald-500">R$ {{ "%.2f"|format(roi.depreciation_total) }}</span>
+                    <span id="roi_depreciation_total" class="font-bold text-emerald-500">R$ {{ "%.2f"|format(roi.depreciation_total) }}</span>
                 </div>
                 {% if roi.machine_cost > 0 %}
                 <div class="progress-bar">
-                    <div class="progress-fill {% if roi.roi_percent >= 100 %}bg-emerald-500{% else %}bg-indigo-500{% endif %}"
+                    <div id="roi_bar" class="progress-fill {% if roi.roi_percent >= 100 %}bg-emerald-500{% else %}bg-indigo-500{% endif %}"
                          style="width: {{ [roi.roi_percent, 100]|min }}%"></div>
                 </div>
                 <div class="flex justify-between text-xs">
-                    <span class="text-gray-400">{{ roi.roi_percent }}% amortizado</span>
-                    <span class="text-gray-400">Meta: R$ {{ "%.2f"|format(roi.machine_cost) }}</span>
+                    <span id="roi_percent_text" class="text-gray-400">{{ roi.roi_percent }}% amortizado</span>
+                    <span id="roi_machine_cost_text" class="text-gray-400">Meta: R$ {{ "%.2f"|format(roi.machine_cost) }}</span>
                 </div>
                 {% if roi.roi_percent >= 100 %}
                 <div class="mt-2 p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-center">
